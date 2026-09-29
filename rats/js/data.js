@@ -3,14 +3,15 @@
 // 고양이처럼 일반·레어·에픽·유니크·전설·신화.
 // 등급은 기본 체급(크기·기본 힘)과 특수 능력의 세기만 정한다. 실제 개성은 종마다 다른 특수 능력(ABILITY) + 종별 스킬 트리.
 // w: 탄생 시 기본 확률 가중치 (난동 등급이 오를수록 높은 등급 쪽으로 기움)
+//    초반(난동 0)엔 레어 ≈7%, 에픽 ≈1%, 유니크 0.1%, 전설 0.01%, 신화 0.002% 로 윗등급은 거의 안 나옴
 // ab: 특수 능력 세기 배율 / cost: 종별 스킬 트리 비용 배율
 const TIERS = [
-  { name: '일반', col: '#a8a29a', size: 1, dmg: 1, spd: 1, w: 62, ab: 1, cost: 1 },
-  { name: '레어', col: '#7fa8bf', size: 1.12, dmg: 2, spd: 1.05, w: 25, ab: 1.3, cost: 3 },
-  { name: '에픽', col: '#a58bb8', size: 1.25, dmg: 4, spd: 1.1, w: 9, ab: 1.7, cost: 10 },
-  { name: '유니크', col: '#c9846e', size: 1.4, dmg: 8, spd: 1.15, w: 3, ab: 2.2, cost: 30 },
-  { name: '전설', col: '#d9a441', size: 1.6, dmg: 16, spd: 1.1, w: 0.8, ab: 3, cost: 100 },
-  { name: '신화', col: '#d9786a', size: 1.85, dmg: 32, spd: 1.2, w: 0.2, ab: 4, cost: 300 },
+  { name: '일반', col: '#a8a29a', size: 1, dmg: 1, spd: 1, w: 100, ab: 1, cost: 1 },
+  { name: '레어', col: '#7fa8bf', size: 1.12, dmg: 2, spd: 1.05, w: 8, ab: 1.3, cost: 3 },
+  { name: '에픽', col: '#a58bb8', size: 1.25, dmg: 4, spd: 1.1, w: 1, ab: 1.7, cost: 10 },
+  { name: '유니크', col: '#c9846e', size: 1.4, dmg: 8, spd: 1.15, w: 0.1, ab: 2.2, cost: 30 },
+  { name: '전설', col: '#d9a441', size: 1.6, dmg: 16, spd: 1.1, w: 0.01, ab: 3, cost: 100 },
+  { name: '신화', col: '#d9786a', size: 1.85, dmg: 32, spd: 1.2, w: 0.002, ab: 4, cost: 300 },
 ];
 
 // 털색 프리셋 (실제 쥐·설치류)
@@ -240,21 +241,186 @@ const RSKILLS = [
 const RSKILL_BY_ID = Object.fromEntries(RSKILLS.map(s => [s.id, s]));
 
 // ───────────────────────── 종별 스킬 트리 ─────────────────────────
-// 모든 종이 같은 뼈대를 쓰고, '특수 능력'만 종마다 다르다. 비용은 등급 배율(TIERS.cost)만큼 비싸진다.
+// 공통 뼈대(갉기·다리·재롱·급소·특수 능력·각성) + 종마다 다른 '특수 액션' 가지(act → actPow → actX).
+// act/actPow/actX 의 이름·아이콘·설명은 그 종의 ACT(아래 ACT_LIST)에서 가져온다. 비용은 등급 배율(TIERS.cost)만큼 비싸진다.
 const RAT_TREE = [
   { id: 'dmg', icon: '⚔️', name: '갉기 훈련', max: 25, base: 40, grow: 1.6, grid: [1, 0], req: null,
     desc: l => `이 종의 갉는 힘 ×${fx(Math.pow(1.25, l))} → ×${fx(Math.pow(1.25, l + 1))}` },
   { id: 'legs', icon: '👟', name: '뒷발 근육', max: 10, base: 150, grow: 1.8, grid: [0, 1], req: ['dmg', 3],
     desc: l => `돌진 속도 +${l * 8}% → +${(l + 1) * 8}%` },
-  { id: 'show', icon: '🤹', name: '재롱 본능', max: 5, base: 200, grow: 1.9, grid: [2, 1], req: ['dmg', 3],
+  { id: 'act', icon: '🎬', name: '특수 액션', max: 5, base: 120, grow: 2.2, grid: [2, 1], req: ['dmg', 1], act: 'act', desc: () => '' },
+  { id: 'show', icon: '🤹', name: '재롱 본능', max: 5, base: 200, grow: 1.9, grid: [3, 1], req: ['dmg', 3],
     desc: l => `묘기 확률 ×${(1 + 0.4 * l).toFixed(1)} → ×${(1 + 0.4 * (l + 1)).toFixed(1)}` },
   { id: 'crit', icon: '🎯', name: '급소 갉기', max: 5, base: 1000, grow: 2, grid: [0, 2], req: ['legs', 5],
     desc: l => `크리티컬 확률 +${l * 4}% → +${(l + 1) * 4}%` },
-  { id: 'special', icon: '✨', name: '특수 강화', max: 5, base: 3000, grow: 2.3, grid: [2, 2], req: ['show', 2], special: true,
+  { id: 'actPow', icon: '💥', name: '액션 위력', max: 10, base: 800, grow: 1.9, grid: [2, 2], req: ['act', 1], act: 'pow', desc: () => '' },
+  { id: 'special', icon: '✨', name: '특수 강화', max: 5, base: 3000, grow: 2.3, grid: [3, 2], req: ['show', 2], special: true,
     desc: () => '' },
-  { id: 'ult', icon: '🌟', name: '각성', max: 1, base: 5e5, grow: 1, grid: [1, 3], req: ['special', 5],
+  { id: 'actX', icon: '🌟', name: '액션 각성', max: 1, base: 8e4, grow: 1, grid: [2, 3], req: ['actPow', 3], act: 'x', desc: () => '' },
+  { id: 'ult', icon: '🌟', name: '각성', max: 1, base: 5e5, grow: 1, grid: [3, 3], req: ['special', 5],
     desc: () => '갉는 힘 ×3, 특수 능력 세기 ×1.5, 몸에서 빛이 난다' },
 ];
+
+// ───────────────────────── 특수 액션 (종마다 하나) ─────────────────────────
+// 발동 조건(trig) + 액션 종류(type) 조합. 실제 동작은 rats/js/acts.js. 화면에 보이는 쥐만 발동.
+// p: 발동 확률 · cd: 주기(초) · n: 기준 수. 해금 레벨이 오를수록 확률 ↑ / 주기 ↓
+const ACT_TRIG = {
+  drop: (a, k) => `자기가 부순 물건에서 ${pct(a.p * k)} 확률로 ${a.propName || a.prop} 드랍 → 같은 종이 주우면`,
+  bump: (a, k) => `물건에 부딪힐 때 ${pct(a.p * k)} 확률로`,
+  wall: (a, k) => `벽을 들이받을 때 ${pct(a.p * k)} 확률로`,
+  crowd: (a, k) => `주변에 동료가 ${a.n}마리 이상 모이면 (${Math.round(a.cd / k)}초마다)`,
+  combo: (a, k) => `${a.n} 콤보 이상일 때 부딪히면 ${pct(a.p * k)} 확률로`,
+  birth: (a, k) => `새끼를 낳을 때 ${pct(Math.min(1, a.p * k))} 확률로`,
+  sleep: (a, k) => `잠들 때 ${pct(Math.min(1, a.p * k))} 확률로`,
+  gold: (a, k) => `황금 물건을 갉으면 ${pct(Math.min(1, a.p * k))} 확률로`,
+  wave: (a, k) => `택배 투하 때 화면에 있으면 ${pct(Math.min(1, a.p * k))} 확률로`,
+  timer: (a, k) => `${Math.round(a.cd / k)}초마다`,
+};
+const ACT_TYPES = {
+  gunkata: { d: P => `빙글빙글 돌며 사방으로 총알 난사 (총알 피해 ×${P.toFixed(1)})`, x: '쌍권총: 총알 2배' },
+  slam: { d: P => `3번 뛰어올라 쾅! 내려찍기 (반경 ${Math.round(80 + 15 * P)})`, x: '5연속 내려찍기' },
+  slash: { d: P => `물건 사이를 4번 순간 돌진하며 일섬 (피해 ×${(3 * P).toFixed(1)})`, x: '7연속 일섬' },
+  barrage: { d: P => `주변에 ${4 + Math.floor(P)}개 투척 폭격`, x: '투척 수 2배' },
+  sonic: { d: P => `음파 충격파 5번 + 주변 동료 광란 (반경 ${Math.round(140 + 20 * P)})`, x: '음파 범위 1.5배' },
+  beam: { d: P => `360° 회전 레이저 (피해 ×${(2 * P).toFixed(1)})`, x: '양방향 레이저' },
+  breath: { d: P => `부채꼴로 휘두르는 브레스 (사거리 ${Math.round(170 + 20 * P)})`, x: '한 바퀴 도는 브레스' },
+  ball: { d: P => `거대한 공이 되어 3초간 굴러다니며 파괴 (피해 ×${(2 * P).toFixed(1)})`, x: '더 크게, 더 오래' },
+  summon: { d: P => `동료 ${2 + Math.floor(P)}마리 소환 (6초 동안 함께 난동)`, x: '소환 수 2배' },
+  vortex: { d: P => `주변 물건을 빨아들인 뒤 대폭발 (반경 ${Math.round(200 + 20 * P)})`, x: '흡입 범위 1.5배' },
+  meteor: { d: P => `하늘에서 ${4 + Math.floor(P)}개 낙하`, x: '낙하 수 2배' },
+  midas: { d: P => `주변 물건을 전부 황금으로 (반경 ${Math.round(160 + 20 * P)}, 치즈 ×10)`, x: '범위 2배' },
+  tornado: { d: P => `회오리가 되어 휩쓸고 다님 (피해 ×${P.toFixed(1)})`, x: '더 큰 회오리' },
+  dig: { d: P => `땅속으로 파고들어 물건 밑에서 4번 솟구침 (피해 ×${(3 * P).toFixed(1)})`, x: '7번 솟구침' },
+  cheer: { d: P => `주변 동료 전원 광란 ${(3 + P).toFixed(1)}초 (속도·피해 ×1.5)`, x: '화면 전체 응원' },
+  feast: { d: P => `앞의 물건을 초고속 12연타 (타당 피해 ×${P.toFixed(1)})`, x: '24연타' },
+  throw: { d: P => `주변 물건을 번쩍 들어 집어던짐 (충돌 피해 ×${(3 * P).toFixed(1)})`, x: '3개 연속 던지기' },
+};
+// [종 id, 발동 조건, 조건 값, 액션, 이름, 아이콘, 외침 목록, (드랍 소품)]
+const A = (id, trig, v, type, name, icon, lines, prop) => ({ id, trig, type, name, icon, lines, prop, ...v });
+const ACT_LIST = [
+  A('brownrat', 'crowd', { n: 6, cd: 20 }, 'summon', '하수구 동창회', '📢', ['얘들아 모여!', '동창회다!']),
+  A('mouse', 'wall', { p: 0.12 }, 'dig', '벽 틈 땅굴', '🕳️', ['땅굴 파기!', '찍찍 두더지!']),
+  A('labrat', 'bump', { p: 0.03 }, 'slash', '미로 폭주', '🌀', ['출구가 어디야!', '미로 탈출!']),
+  A('hooded', 'combo', { n: 10, p: 0.08 }, 'slam', '후드 3단 박치기', '💢', ['박치기다!', '후드 파워!']),
+  A('fieldmouse', 'birth', { p: 0.35 }, 'summon', '대가족 상경', '🏡', ['시골 식구들 왔다!', '할머니도 오셨어!']),
+  A('hamster', 'drop', { p: 0.04 }, 'ball', '햄스터 볼 폭주', '🔵', ['굴러간다~!', '쳇바퀴 모드!'], '🔵'),
+  A('scientist', 'drop', { p: 0.04 }, 'barrage', '플라스크 난사', '⚗️', ['실험 시작!', '유레카!'], '⚗️'),
+  A('nerd', 'bump', { p: 0.03 }, 'feast', '연필 난타', '✏️', ['벼락치기!', '계산 끝!']),
+  A('builder', 'drop', { p: 0.04 }, 'slam', '오함마 철거', '🔨', ['철거 들어갑니다!', '안전제일!'], '🔨'),
+  A('chef', 'bump', { p: 0.03 }, 'feast', '칼질 난무', '🔪', ['다다다다닥!', '오늘의 요리!']),
+  A('traveler', 'bump', { p: 0.03 }, 'ball', '배낭 굴리기', '🎒', ['여행은 구르는 거야!', '출발~!']),
+  A('mailman', 'timer', { cd: 22 }, 'barrage', '속달 편지 폭격', '✉️', ['속달이요!', '등기 왔습니다!']),
+  A('courier', 'wave', { p: 0.6 }, 'meteor', '로켓 배송', '🚀', ['총알 배송!', '하늘에서 배송!']),
+  A('party', 'combo', { n: 25, p: 0.1 }, 'cheer', '파티 타임', '🥳', ['파티다!!', '다 같이 춤춰!']),
+  A('glowy', 'combo', { n: 15, p: 0.08 }, 'vortex', '방사능 폭주', '☢️', ['폭주한다!', '위험 위험!']),
+  A('mutant', 'bump', { p: 0.03 }, 'summon', '세포 분열', '🧬', ['분열!', '나 둘, 나 셋!']),
+  A('buff', 'bump', { p: 0.035 }, 'throw', '3대 500 던지기', '🏋️', ['으랴차!', '이것도 가볍지!']),
+  A('ninja', 'bump', { p: 0.03 }, 'summon', '그림자 분신술', '🥷', ['분신술!', '닌닌!']),
+  A('pandahamster', 'bump', { p: 0.035 }, 'ball', '판다 대왕 구르기', '🐼', ['데굴데굴~', '판다 굴러간다!']),
+  A('skater', 'drop', { p: 0.04 }, 'slam', '하프파이프 킥플립', '🛹', ['킥플립!', '360 알리!'], '🛹'),
+  A('idol', 'crowd', { n: 5, cd: 18 }, 'sonic', '게릴라 콘서트', '🎤', ['찍찍 사랑해요~!', '앵콜!']),
+  A('sleepy', 'sleep', { p: 0.5 }, 'sonic', '지진 코골이', '💤', ['드르렁!!!', 'ZZZ...쿠궁!']),
+  A('cyborg', 'timer', { cd: 20 }, 'beam', '360° 레이저', '👁️', ['타겟 전부 포착.', '레이저 풀가동!']),
+  A('police', 'combo', { n: 20, p: 0.08 }, 'summon', '지원 요청', '🚓', ['지원 바란다!', '포위해!']),
+  A('firefighter', 'drop', { p: 0.04 }, 'breath', '소방 호스 난사', '🧯', ['불 끄러 왔습니다!', '물대포 발사!'], '🧯'),
+  A('pirate', 'combo', { n: 15, p: 0.08 }, 'barrage', '대포 일제 사격', '💣', ['발사!!', '해적의 인사다!']),
+  A('cowboy', 'bump', { p: 0.03 }, 'vortex', '올가미 끌어오기', '🪢', ['이랴!', '다 끌려와!']),
+  A('soldier', 'drop', { p: 0.04, propName: '권총' }, 'gunkata', '건 카타', '🎖️', ['탕탕탕탕!', '건 카타 개시!'], '🔫'),
+  A('nurse', 'birth', { p: 0.4 }, 'cheer', '링거 투혼', '💉', ['힘내세요!', '주사 한 방!']),
+  A('miner', 'drop', { p: 0.04 }, 'dig', '갱도 기습', '⛏️', ['굴착 개시!', '광맥이다!'], '⛏️'),
+  A('hero', 'combo', { n: 10, p: 0.08 }, 'slash', '초음속 연속 펀치', '🦸', ['정의의 주먹!', '슈퍼 펀치!']),
+  A('wizard', 'drop', { p: 0.04 }, 'meteor', '메테오', '☄️', ['메테오!!', '하늘이여!'], '🪄'),
+  A('samurai', 'bump', { p: 0.035 }, 'slash', '발도술 일섬', '⚔️', ['일섬.', '이미 베었다.']),
+  A('rocker', 'drop', { p: 0.04 }, 'sonic', '기타 솔로', '🎸', ['헤드뱅잉!!', '록 앤 롤!'], '🎸'),
+  A('detective', 'bump', { p: 0.03 }, 'throw', '증거물 투척', '🔍', ['범인은 너다!', '증거 확보!']),
+  A('vampire', 'timer', { cd: 22 }, 'vortex', '흡혈 소용돌이', '🦇', ['피가 아니라 치즈!', '다 빨아들인다!']),
+  A('santa', 'wave', { p: 0.7 }, 'barrage', '선물 폭격', '🎁', ['메리 쥐스마스!', '선물 받아라!']),
+  A('zombie', 'bump', { p: 0.03 }, 'summon', '좀비 떼', '🧟', ['끄어어...', '치즈... 치즈...']),
+  A('ratking', 'crowd', { n: 5, cd: 16 }, 'summon', '왕의 군대', '👑', ['짐의 군대여!', '진격하라!']),
+  A('ratqueen', 'birth', { p: 0.4 }, 'cheer', '여왕의 축복', '👸', ['모두 힘내렴~', '여왕의 명령이다!']),
+  A('emperor', 'crowd', { n: 5, cd: 18 }, 'barrage', '궁수대 일제 사격', '🏹', ['쏘아라!', '황제의 칙령이다!']),
+  A('pharaoh', 'gold', { p: 0.5 }, 'midas', '황금의 손', '🏺', ['모두 황금이 되어라!', '파라오의 보물!']),
+  A('knight', 'bump', { p: 0.035 }, 'slash', '랜스 차지', '🛡️', ['돌격!!', '기사의 명예를 걸고!']),
+  A('viking', 'drop', { p: 0.04 }, 'slam', '대지 가르기', '🪓', ['발할라!!', '약탈이다!'], '🪓'),
+  A('sultan', 'timer', { cd: 24 }, 'tornado', '양탄자 회오리', '🧞', ['소원을 말해봐!', '양탄자 출격!']),
+  A('ballerina', 'combo', { n: 15, p: 0.1 }, 'tornado', '32회전 그랑 푸에테', '🩰', ['앙 드오르!', '32회전!']),
+  A('astro', 'timer', { cd: 22 }, 'meteor', '궤도 폭격', '🛰️', ['궤도 폭격 요청!', '휴스턴, 문제없다!']),
+  A('alien', 'timer', { cd: 22 }, 'summon', '외계인 친구들', '🛸', ['삐리삐리!', '친구들 왔다!']),
+  A('robot', 'combo', { n: 15, p: 0.08 }, 'barrage', '미사일 폭격', '🤖', ['미사일 발사.', '삐빅, 섬멸!']),
+  A('dragon', 'timer', { cd: 20 }, 'breath', '치즈 브레스', '🔥', ['크아아앙!', '치즈 냄새 주의!']),
+  A('cosmic', 'combo', { n: 20, p: 0.1 }, 'vortex', '블랙홀', '🌌', ['우주의 섭리!', '다 빨려 들어간다!']),
+  A('ghost', 'wall', { p: 0.12 }, 'dig', '유령 기습', '👻', ['우우우~', '밑에서 나타났지!']),
+  A('angel', 'timer', { cd: 24 }, 'cheer', '천상의 합창', '😇', ['할렐루야~', '축복을!']),
+  A('dino', 'bump', { p: 0.035 }, 'slam', '공룡 대지진', '🦖', ['크아앙!', '쿵쾅쿵쾅!']),
+];
+for (const a of ACT_LIST) RSPECIES_BY_ID[a.id].act = a;
+const actK = l => 1 + 0.3 * Math.max(0, l - 1);                                    // 해금 레벨 → 확률/빈도 배율
+const actPower = (sp, powLv, ult) => TIERS[sp.tier].ab * (1 + 0.3 * powLv) * (ult ? 1.5 : 1);
+function actDesc(sp, l, powLv) {
+  const a = sp.act;
+  return `${ACT_TRIG[a.trig](a, actK(Math.max(1, l)))} → ${a.name}: ${ACT_TYPES[a.type].d(actPower(sp, powLv))}`;
+}
+// ───────────────────────── 필살기 (전설·신화 전용, 병맛 패러디 상황극) ─────────────────────────
+// 고트 시뮬레이터 풍: 물리가 난장판이 되고, 캐릭터가 래그돌처럼 날아다니고, 끝나면 뜬금없는 "🏆 업적 달성".
+// 흐름: ① 화면 정지 + 확대 + 필살기 이름 (준비 동작) → ② 병맛 상황 약 3초 (게임은 진행) → 업적 알림.
+// 슈퍼 점프보다 자주(화면에 있을 때 초당 ULT_CHANCE, 쿨 ULT_COOL초)지만 약함: 쥐 주변 반경 안만, 벽은 안 부숨. 동작은 rats/js/ults.js.
+const ULT_CHANCE = 1 / 200, ULT_COOL = 60;
+const ULT_TYPES = {
+  recoil: '빔을 쐈더니 반동으로 본인이 날아가며 사방에 난사',
+  boulder: '거대 치즈 바퀴가 굴러와 전부 깔아뭉갬 (본인은 도망)',
+  knot: '주변 쥐들 꼬리가 엉켜 거대한 쥐 공이 되어 통통 튀어다님',
+  zerog: '무중력 구간: 전부 둥둥 떠올랐다가 한꺼번에 추락',
+  lemmings: '물건들이 줄지어 천국의 계단을 오르다 꼭대기에서 차례로 투신',
+  possess: '물건들에 빙의해서 서로 쫓아다니며 부딪힘',
+  flyby: '썰매를 타고 저공비행하며 선물 폭격',
+  catapult: '투석기에 자기를 장전해서 발사 → 착지마다 쾅 (세 번)',
+  genie: '램프의 지니가 소원 3개를 곡해해서 들어줌',
+  tableflip: '물건을 식탁에 모아 티타임 → 밥상 뒤집기',
+  mosh: '화면 속 쥐 전원 떼창 헤드뱅잉 → 착지마다 지진',
+  glitch: '화면이 버그 남: 물건 복제·순간이동 → 삭제',
+  conga: '물건과 쥐들이 줄줄이 콩가 춤 → 박수 한 번에 폭발',
+  split: '칼을 넣는 순간 전부 반으로 쩍',
+  excalibur: '바위에 꽂힌 전설의 검을 뽑았더니 바위까지 딸려 나옴 → 그걸로 휘두름',
+  abduct: 'UFO 가 물건과 쥐를 납치해 공중에서 투척',
+  transform: '자동차로 변신해서 무면허 폭주 → 벽에 박고 분해',
+  fondue: '치즈 퐁듀 브레스로 바닥이 미끌미끌',
+  meteorself: '대멸종 운석이 자기 머리에 먼저 떨어짐 → 분노의 발구름',
+  bigbat: '거대 박쥐로 변신했는데 날개가 너무 커서 조종 불가',
+  strings: '물건 사이 음모론 빨간 실 → 실 순서대로 연쇄 폭발',
+  fireworks: '불꽃놀이 로켓 난사 (안전 수칙 무시)',
+  zombify: '화면 속 쥐 전원 좀비 감염: 흐느적대며 갉음',
+  drill: '너무 빨리 돌아서 땅을 뚫고 여기저기서 솟구침',
+};
+// [종 id, 상황, 이름, 대사, 테마색, 아이콘, 업적 이름, (탈것: sleigh·carpet·boat)]
+const U = (id, type, name, line, col, fx, achv, ride) => ({ id, type, name, line, col, fx, achv, ride });
+const ULT_LIST = [
+  U('hero', 'recoil', '슈퍼 노바 빔', '정의의 빔을 받아라!!', '#e8786a', '💥', '반동은 계산 안 했다'),
+  U('wizard', 'boulder', '아마겟돈(치즈)', '하늘이여, 치즈를 내려라!', '#e3c46a', '🧀', '인디아나 치즈'),
+  U('samurai', 'split', '천본앵 난무', '…너는 이미 부서져 있다.', '#e8a3a0', '🌸', '이미 부서져 있었다'),
+  U('rocker', 'mosh', '앵콜 대폭발', '다 같이 헤드뱅잉!!', '#f0c878', '🎸', '모싱 피트'),
+  U('detective', 'strings', '진실은 언제나 하나!', '모든 게… 연결되어 있었어!', '#d9786a', '🔍', '모든 건 연결되어 있다'),
+  U('vampire', 'bigbat', '블러드 문 변신', '어둠의 날개여…! 어? 어어어?!', '#d9786a', '🦇', '박쥐 운전면허 탈락'),
+  U('santa', 'flyby', '선물 대폭격', '호우호우! 올해 착한 물건은 없다!', '#d9786a', '🎁', '올해의 나쁜 아이', 'sleigh'),
+  U('zombie', 'zombify', '좀비 아포칼립스', '치즈으으으…!', '#9dbb8f', '🧟', '감염자 0 → 전원'),
+  U('ratking', 'knot', '쥐왕 대결속', '짐과 하나가 되어라!!', '#d9a441', '👑', '실존하는 공포, 쥐왕'),
+  U('ratqueen', 'tableflip', '로열 티타임', '호호호~ 차 한잔… 하면서!!', '#f2b8b0', '🫖', '우아한 밥상 뒤집기'),
+  U('emperor', 'fireworks', '황제의 대축제', '만세! 만만세!', '#e3c46a', '🎆', '불꽃놀이는 안전하게(안 함)'),
+  U('pharaoh', 'conga', '파라오의 행진', '다 같이 이집트 춤을!', '#e3c46a', '🏺', '워크 라이크 언 이집션'),
+  U('knight', 'excalibur', '엑스칼리버', '전설의 검이여, 나를 선택하라!', '#bfe3ea', '🗡️', '돌도 검이다'),
+  U('viking', 'catapult', '발할라 투석기', '발할라로 날아간다아아!!', '#8fb3c7', '🪓', '인간 대포(쥐)'),
+  U('sultan', 'genie', '램프의 지니', '지니야, 소원이 있어!', '#cdb4db', '🧞', '소원은 신중하게'),
+  U('ballerina', 'drill', '백조의 호수(지하)', '32회전… 33… 멈출 수가 없어!!', '#f2c6d6', '🩰', '지구 뚫기'),
+  U('astro', 'zerog', '무중력 구간', '휴스턴, 중력이 사라졌다.', '#bfe3ea', '🛰️', '무중력은 공짜'),
+  U('alien', 'abduct', 'UFO 대납치', '표본 채집을 시작한다. 삐리.', '#9dd5a8', '🛸', '표본 채집 완료'),
+  U('robot', 'transform', '트랜스폼', '변신!! 치키치키치키…', '#9fb2bd', '🚗', '무면허 변신'),
+  U('dragon', 'fondue', '드래곤 퐁듀', '크아앙… 어라, 치즈가 나오네?', '#f0c878', '🫕', '치즈 퐁듀 대참사'),
+  U('cosmic', 'glitch', '빅뱅.exe', '우주를… 재부팅한다.', '#a58bb8', '🌌', '우주.exe 재시작'),
+  U('ghost', 'possess', '폴터가이스트', '우우우~ 물건들아 일어나라~', '#e8e0e6', '👻', '빙의 대소동'),
+  U('angel', 'lemmings', '천국의 계단', '물건들이여, 계단을 오르라~', '#fff3bf', '😇', '레밍즈'),
+  U('dino', 'meteorself', '대멸종', '공룡의 운명을 받아라!', '#9dbb8f', '🦖', '셀프 멸종'),
+];
+for (const u of ULT_LIST) RSPECIES_BY_ID[u.id].ult = u;
+
 const RAT_TREE_BY_ID = Object.fromEntries(RAT_TREE.map(s => [s.id, s]));
 const rampNeed = R => Math.floor(15 * Math.pow(1.3, R));      // 난동 등급 R → R+1 에 필요한 파괴 수
 const PROMOTE_COST = 10;                                       // 같은 등급 10마리 → 윗등급 랜덤 1마리 (신화는 승급 없음)

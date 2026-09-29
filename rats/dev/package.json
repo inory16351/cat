@@ -1,0 +1,13 @@
+{
+  "name": "rat-uprising-dev",
+  "private": true,
+  "type": "module",
+  "description": "쥐들의 반란 개발 도구 (Codex 이미지 생성 + 파츠 슬라이스)",
+  "dependencies": {
+    "sharp": "^0.34.0"
+  },
+  "scripts": {
+    "images": "node gen_parts.mjs && node slice_parts.mjs && node gen_art.mjs && node build.mjs",
+    "build": "node build.mjs"
+  }
+}

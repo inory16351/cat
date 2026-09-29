@@ -40,8 +40,9 @@ def collect_assets() -> dict:
             assets[f'assets/v2/bg/{name}.png'] = webp_uri(p, 1536)
     rats_dir = ROOT / 'assets' / 'rats'
     if rats_dir.exists():
-        for p in sorted(rats_dir.glob('*.png')):
-            assets[f'assets/rats/{p.name}'] = webp_uri(p, 1280 if p.stem.startswith(('bg_', 'title')) else 360)
+        # 파츠(assets/rats/parts/<종>/<파츠>.png) 포함, 하위 폴더까지
+        for p in sorted(rats_dir.rglob('*.png')):
+            assets[p.relative_to(ROOT).as_posix()] = webp_uri(p, 1280 if p.stem.startswith(('bg_', 'title')) else 360)
     return assets
 
 

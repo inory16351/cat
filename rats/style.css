@@ -226,3 +226,7 @@ h1 span { color: var(--terra); }
 .ab-card small { display: block; color: var(--ink-soft); font-size: .85em; margin-top: .15em; line-height: 1.45; }
 .node.special { background: #f6ecd8; }
 #dexDetail .big { width: 100%; margin-top: .4em; }
+/* 특수 액션 카드 / 설명 줄바꿈 */
+.ab-card.act { background: #fbf1dc; box-shadow: 0 .1em .4em rgba(200, 150, 60, .18); }
+.d-desc { white-space: pre-line; }
+.ab-card.ult { background: #efe3f3; box-shadow: 0 .1em .4em rgba(140, 100, 170, .2); }

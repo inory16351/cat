@@ -9,7 +9,9 @@ const UI = (() => {
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const c = cv.getContext('2d'), img = IMG['rat_' + sp.id];
     c.save();
-    if (img) { const s = Math.min(w / img.width, h / img.height) * 0.9; c.drawImage(img, (w - img.width * s) / 2, (h - img.height * s) / 2, img.width * s, img.height * s); }
+    const rig = RAT_RIGS[sp.id];
+    if (rig) { const s = Math.min(w / 72, h / 50) * (RIG_LEN.rat / (RIG_LEN[sp.shape] || 44)) ** 0.5; c.translate(w / 2 - 2 * s, h * 0.86); c.scale(s, s); drawRatRig(rig, 1, { ...RIG_IDLE }, c); }
+    else if (img) { const s = Math.min(w / img.width, h / img.height) * 0.9; c.drawImage(img, (w - img.width * s) / 2, (h - img.height * s) / 2, img.width * s, img.height * s); }
     else { const s = Math.min(w / 80, h / 55); c.translate(w / 2 + 4 * s, h * 0.78); c.scale(s, s); drawRodent(c, sp, { t: 0.3, walk: 0, moving: false, bite: 0, sleep: false }); }
     c.restore();
     if (!known) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = '#6b625a'; c.fillRect(0, 0, w, h); }
@@ -27,7 +29,7 @@ const UI = (() => {
     $('ramp').textContent = `🔥 난동 등급 ${S.ramp}`;
     $('rampBar').style.width = (S.rampProg / rampNeed(S.ramp) * 100).toFixed(1) + '%';
     const w = tierWeights(), sum = w.reduce((a, b) => a + b, 0);
-    const hi = TIERS.map((t, i) => [t, w[i] / sum]).filter(([, p], i) => i >= 1 && p >= 0.001).map(([t, p]) => `${t.name} ${(p * 100).toFixed(p < 0.1 ? 1 : 0)}%`).join(' · ');
+    const hi = TIERS.map((t, i) => [t, w[i] / sum]).filter(([, p], i) => i >= 1 && p >= 0.001).map(([t, p]) => `${t.name} ${oddsPct(p)}`).join(' · ');
     $('rampSub').textContent = `탄생 확률 · ${hi}`;
     const ww = weakestWall();
     $('zone').textContent = `방 ${OPEN.size}개` + (ww ? ` · 가장 약한 벽 🧱${fmt(Math.max(0, ww.hp))} (→ ${ww.zone.name})` : '');
@@ -54,10 +56,24 @@ const UI = (() => {
     const sp = RSPECIES_BY_ID[mode];
     return {
       list: RAT_TREE, get: s => rsl(sp.id, s.id), set: (s, v) => { (S.rsk[sp.id] = S.rsk[sp.id] || {})[s.id] = v; }, cost: (s, l) => ratSkillCost(s, sp.id, l),
-      pos: s => [30 + s.grid[0] * 26, 86 - s.grid[1] * 24], name: s => s.special ? sp.ab.name : s.name, icon: s => s.special ? sp.ab.icon : s.icon,
-      desc: (s, l) => s.special ? `${abDesc(sp, l)} → ${abDesc(sp, l + 1)}` : s.desc(l), reqOk: s => !s.req || rsl(sp.id, s.req[0]) >= s.req[1],
-      reqName: s => { const r = RAT_TREE_BY_ID[s.req[0]]; return r.special ? sp.ab.name : r.name; },
+      pos: s => [31 + s.grid[0] * 19.5, 86 - s.grid[1] * 24], name: s => nodeName(sp, s), icon: s => (s.special ? sp.ab.icon : s.act === 'act' ? sp.act.icon : s.icon),
+      desc: (s, l) => (s.special ? `${abDesc(sp, l)} → ${abDesc(sp, l + 1)}` : s.act ? actNodeDesc(sp, s, l) : s.desc(l)), reqOk: s => !s.req || rsl(sp.id, s.req[0]) >= s.req[1],
+      reqName: s => nodeName(sp, RAT_TREE_BY_ID[s.req[0]]),
     };
+  }
+  // 종별 트리 노드 이름: 특수 능력·특수 액션 노드는 그 종 고유 이름으로
+  function nodeName(sp, s) {
+    if (s.special) return sp.ab.name;
+    if (s.act === 'act') return sp.act.name;
+    if (s.act === 'pow') return sp.act.name + ' 위력';
+    if (s.act === 'x') return sp.act.name + ' 각성';
+    return s.name;
+  }
+  function actNodeDesc(sp, s, l) {
+    const pw = rsl(sp.id, 'actPow'), ult = rsl(sp.id, 'ult');
+    if (s.act === 'act') return l ? `${actDesc(sp, l, pw)}\n\n다음 레벨: 발동 확률·빈도 ×${actK(l).toFixed(1)} → ×${actK(l + 1).toFixed(1)}` : `[해금] ${actDesc(sp, 1, pw)}`;
+    if (s.act === 'pow') return `${sp.act.name} 위력 ×${actPower(sp, l, ult).toFixed(1)} → ×${actPower(sp, l + 1, ult).toFixed(1)}\n${ACT_TYPES[sp.act.type].d(actPower(sp, l + 1, ult))}`;
+    return `각성: ${ACT_TYPES[sp.act.type].x}`;
   }
   const isMax = (T, s) => s.max && T.get(s) >= s.max;
   const herdIds = () => [...new Set(G.rats.map(r => r.sp.id))];
@@ -91,7 +107,7 @@ const UI = (() => {
       const sp = RSPECIES_BY_ID[treeMode], t = TIERS[sp.tier], n = G.rats.filter(r => r.sp.id === sp.id).length;
       const box = document.createElement('div'); box.className = 'tree-cat';
       box.appendChild(ratPic(sp, 200, 150));
-      box.insertAdjacentHTML('beforeend', `<b>${sp.name}</b><small><span class="rar" style="background:${t.col}">${t.name}</span> 무리에 ${n}마리 · 비용 ×${t.cost}</small><div class="ab-card">${sp.ab.icon} <b>${sp.ab.name}</b><small>${abDesc(sp, rsl(sp.id, 'special'))}</small></div>`);
+      box.insertAdjacentHTML('beforeend', `<b>${sp.name}</b><small><span class="rar" style="background:${t.col}">${t.name}</span> 무리에 ${n}마리 · 비용 ×${t.cost}</small><div class="ab-card">${sp.ab.icon} <b>${sp.ab.name}</b><small>${abDesc(sp, rsl(sp.id, 'special'))}</small></div>${sp.ult ? `<div class="ab-card ult">${sp.ult.fx} <b>필살기 · ${sp.ult.name}</b><small>가끔 컷씬과 함께 발동: ${ULT_TYPES[sp.ult.type]}</small></div>` : ''}<div class="ab-card act">${sp.act.icon} <b>${sp.act.name}</b><small>${rsl(sp.id, 'act') ? actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '🔒 트리에서 해금 · ' + actDesc(sp, 1, 0)}</small></div>`);
       host.prepend(box);
     }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -177,7 +193,7 @@ const UI = (() => {
   function renderPromo() {
     if (!promoRows) buildPromo();
     const w = tierWeights(), sum = w.reduce((a, b) => a + b, 0);
-    const odds = '<span style="--rc:transparent">🍼 지금 태어날 확률</span>' + TIERS.map((t, i) => `<span style="--rc:${t.col}">${t.name} ${(w[i] / sum * 100).toFixed(w[i] / sum < 0.01 ? 2 : 1)}%</span>`).join('');
+    const odds = '<span style="--rc:transparent">🍼 지금 태어날 확률</span>' + TIERS.map((t, i) => `<span style="--rc:${t.col}">${t.name} ${oddsPct(w[i] / sum)}</span>`).join('');
     if ($('odds').innerHTML !== odds) $('odds').innerHTML = odds;
     TIERS.forEach((t, i) => {
       const R = promoRows[i], mine = G.rats.filter(r => r.tier === i);
@@ -211,6 +227,8 @@ const UI = (() => {
     d.appendChild(ratPic(sp, 260, 195, known));
     d.insertAdjacentHTML('beforeend', `<span class="rar" style="background:${t.col}">${t.name}</span><h3>${known ? sp.name : '???'}</h3><p class="desc">${known ? sp.desc : '아직 만나지 못한 쥐'}</p>
       <div class="ab-card">${known ? sp.ab.icon : '❔'} <b>${known ? sp.ab.name : '???'}</b><small>${known ? abDesc(sp, rsl(sp.id, 'special')) : '만나면 알 수 있어요'}</small></div>
+      ${sp.ult ? `<div class="ab-card ult">${known ? sp.ult.fx : '❔'} <b>필살기 · ${known ? sp.ult.name : '???'}</b><small>${known ? '가끔 컷씬과 함께 발동: ' + ULT_TYPES[sp.ult.type] : '전설 이상 쥐의 필살기'}</small></div>` : ''}
+      <div class="ab-card act">${known ? sp.act.icon : '❔'} <b>${known ? sp.act.name : '???'}</b><small>${known ? (rsl(sp.id, 'act') ? '' : '🔒 스킬 트리에서 해금 · ') + actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '특수 액션'}</small></div>
       <div class="stats"><div>기본 힘<b>×${t.dmg}</b></div><div>크기<b>×${t.size}</b></div><div>스킬 레벨<b>${RAT_TREE.reduce((a, s) => a + rsl(sp.id, s.id), 0)}</b></div><div>지금 무리에<b>${counts[sp.id] || 0}마리</b></div></div>`);
     if (known) { const b = document.createElement('button'); b.className = 'big'; b.textContent = '🌳 스킬 트리'; b.onclick = () => openTree(sp.id); d.appendChild(b); }
   }
@@ -259,6 +277,10 @@ const UI = (() => {
     $('dBuy').onclick = buy;
     $('btnPromo').onclick = () => openPanel('promo', renderPromo);
     $('btnDex').onclick = () => openPanel('dex', renderDex);
+    // 테스트용: 화면 가운데 쥐가 슈퍼 점프 강제 발동 (이미 진행 중이면 무시)
+    $('btnSJ').onclick = () => { ['tree', 'promo', 'dex'].forEach(hide); if (!startSuperJump(true)) Sfx.deny(); };
+    // 테스트용: 전설·신화 필살기 24종을 차례로 강제 발동 (화면에 없는 종은 잠깐 불러옴)
+    $('btnUlt').onclick = () => { ['tree', 'promo', 'dex'].forEach(hide); if (!testUlt()) Sfx.deny(); };
     $('btnMute').onclick = () => { S.muted = Sfx.toggle(); $('btnMute').textContent = S.muted ? '🔇' : '🔊'; };
     if (S.muted) { Sfx.toggle(); $('btnMute').textContent = '🔇'; }
     document.querySelectorAll('.close').forEach(b => (b.onclick = () => { b.closest('.screen').classList.add('hidden'); Sfx.click(); }));
