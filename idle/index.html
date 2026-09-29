@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>냥냥 대참사 방치 모드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1790661959">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- 상단 HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-money">
+      <div class="money">🐟 <b id="churu">0</b></div>
+      <div class="ips"><span id="ips">0</span> /초</div>
+    </div>
+    <div class="hud-level">
+      <div class="lvl-line"><b id="lvl">난동 레벨 1</b> · <span id="zone"></span></div>
+      <div class="bar"><i id="lvlBar"></i></div>
+      <div class="lvl-sub" id="lvlSub"></div>
+    </div>
+    <button id="btnUnlock" class="unlock-btn">🎥 자동 순찰</button>
+    <div class="hud-cats">
+      <div>🐈 <b id="fieldN">1/1</b></div>
+      <div class="sub">도감 <span id="dexN">1/14</span></div>
+    </div>
+  </div>
+
+  <!-- 하단 도크 -->
+  <div id="dock" class="hidden">
+    <button id="btnTree" class="dock-btn">🌳<span>스킬</span><em id="treeBadge" class="badge hidden">0</em></button>
+    <button id="btnDex" class="dock-btn">📖<span>도감</span><em id="dexBadge" class="badge hidden">N</em></button>
+    <button id="btnMute" class="dock-btn small">🔊</button>
+  </div>
+  <div id="hint" class="hint hidden">🐾 가만히 둬도 고양이들이 알아서 부숴요 · 드래그(WASD)로 카메라 이동하면 따라와요 · 클릭하면 뛰어와요</div>
+
+  <div id="toasts"></div>
+
+  <!-- 신종 탄생 -->
+  <div id="newcat" class="screen hidden">
+    <div class="panel newcat-card pop">
+      <div class="nc-top">🎉 신종 고양이 탄생! 🎉</div>
+      <div id="ncPic"></div>
+      <span id="ncRar" class="rar"></span>
+      <h2 id="ncName"></h2>
+      <p id="ncDesc"></p>
+      <div id="ncTrait" class="trait"></div>
+      <button id="ncOk" class="big">반가워!</button>
+    </div>
+  </div>
+
+  <!-- 초기화 확인 -->
+  <div id="resetAsk" class="screen hidden">
+    <div class="panel pop unlock-card">
+      <h2>🗑️ 정말 초기화할까요?</h2>
+      <p>츄르, 스킬, 도감, 구역이 전부 사라지고<br>우리 집 한 칸부터 다시 시작해요.</p>
+      <div class="row-btns"><button id="rsNo" class="mini">취소</button><button id="rsYes" class="big danger">초기화</button></div>
+    </div>
+  </div>
+
+
+
+  <!-- 시작 화면 -->
+  <div id="start" class="screen">
+    <div class="start-card">
+      <img id="titleArt" src="../assets/v2/title.png" alt="" onerror="this.style.display='none'">
+      <div class="start-side">
+        <h1>냥냥 <span>대참사</span></h1>
+        <div class="mode">방치 모드</div>
+        <p>집사가 끝없이 사들이는 물건을<br>고양이들이 <b>알아서</b> 부숩니다.<br>우리 집에서 시작해 온 동네로!</p>
+        <button id="btnStart" class="big">난동 시작!</button>
+        <button id="btnReset" class="mini reset-btn">🗑️ 초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오프라인 보상 -->
+  <div id="offline" class="screen hidden">
+    <div class="panel pop">
+      <h2>😴 자는 동안…</h2>
+      <p id="offText"></p>
+      <div class="big-num">🐟 <b id="offGain">0</b></div>
+      <button id="offOk" class="big">받기</button>
+    </div>
+  </div>
+
+  <!-- 스킬 트리 -->
+  <div id="tree" class="screen hidden">
+    <div class="panel-head">
+      <h2>🌳 스킬 트리</h2>
+      <div id="treeTabs" class="tabs"></div>
+      <div class="money chip">🐟 <b class="churu-live">0</b></div>
+      <button class="close">✕</button>
+    </div>
+    <div class="tree-body">
+      <div id="treeArea"></div>
+      <div class="detail panel">
+        <div id="dIcon" class="d-ic"></div>
+        <div id="dName" class="d-name"></div>
+        <div id="dLv" class="d-lv"></div>
+        <div id="dDesc" class="d-desc"></div>
+        <div class="amt">
+          <button data-amt="1" class="mini on">×1</button><button data-amt="10" class="mini">×10</button><button data-amt="max" class="mini">MAX</button>
+        </div>
+        <button id="dBuy" class="big"></button>
+        <p class="d-tip">노드를 한 번 더 클릭해도 구매돼요</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 도감 -->
+  <div id="dex" class="screen hidden">
+    <div class="panel-head">
+      <h2>📖 고양이 도감</h2>
+      <div class="dex-sum" id="dexSum"></div>
+      <button class="close">✕</button>
+    </div>
+    <div class="dex-body">
+      <div id="dexGrid"></div>
+      <div id="dexDetail" class="panel"></div>
+    </div>
+  </div>
+
+  <div id="fxLayer"></div>
+</div>
+
+<script src="../js/audio.js?v=1790661959"></script>
+<script src="../js/draw.js?v=1790661959"></script>
+<script src="js/data.js?v=1790661959"></script>
+<script src="js/citydraw.js?v=1790661959"></script>
+<script src="js/game.js?v=1790661959"></script>
+<script src="../assets/v2/parts/parts_meta.js?v=1790661959"></script>
+<script src="js/rig.js?v=1790661959"></script>
+<script src="js/ui.js?v=1790661959"></script>
+<script>
+  loadSave();
+  const fit = () => {
+    const wrap = document.getElementById('wrap');
+    const w = Math.min(window.innerWidth, window.innerHeight * 16 / 9);
+    wrap.style.width = w + 'px';
+    wrap.style.height = (w * 9 / 16) + 'px';
+    wrap.style.fontSize = (w / 1280 * 16) + 'px';
+    resizeCanvas();
+  };
+  window.addEventListener('resize', fit);
+  fit();
+  initWorld();
+  UI.init();
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>
