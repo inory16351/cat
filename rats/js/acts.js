@@ -8,6 +8,8 @@ const ACT_MAX_VIS = 3, ACT_CD = 6;
 const ACT_HOLD = { chef: '🔪', nerd: '✏️', samurai: '🗡️', knight: '🛡️', idol: '🎤', pirate: '🧨', santa: '🎁', mailman: '✉️', emperor: '📜', detective: '🔍', cowboy: '🪢', sultan: '🪔' };
 // 던지는 물건 (없으면 드는 소품 → 액션 아이콘)
 const ACT_THROW = { emperor: '🏹', robot: '🚀', pirate: '💣', mailman: '✉️', santa: '🎁', scientist: '⚗️' };
+// Codex 파츠 그림에 이미 소품을 들고 있는 종 (따로 또 그리면 두 개가 됨)
+const SHEET_PROP = new Set(['rocker', 'samurai', 'wizard', 'idol', 'skater', 'cosmic', 'sleepy', 'pandahamster', 'courier']);
 const ACT_DUR = { gunkata: 2.4, slam: 1.55, slash: 1.3, barrage: 1.5, sonic: 2.2, beam: 2, breath: 1.7, ball: 3, summon: 0.9, vortex: 2, meteor: 1.6, midas: 1.2, tornado: 2.6, dig: 2.2, cheer: 1.6, feast: 1.8, throw: 1.5 };
 const ACT_COL = { vampire: '#d9786a', cosmic: '#cdb4db', glowy: '#d6f0a8', cowboy: '#c8a27a', firefighter: '#9fd3e6', dragon: '#f0c878' };
 
@@ -45,7 +47,7 @@ function startAct(r, prop) {
   const a = r.sp.act, P = actP(r), x = actAwake(r);
   r.sleep = 0; r.vx = r.vy = 0; r.trick = null; r.rushT = 0;
   r.act = { type: a.type, t: 0, dur: ACT_DUR[a.type] * (a.type === 'slam' && x ? 5 / 3 : a.type === 'slash' && x ? 1.6 : a.type === 'ball' && x ? 1.5 : a.type === 'throw' && x ? 2.4 : 1),
-    P, x, hold: prop || a.prop || ACT_HOLD[r.sp.id] || null, hitT: 0, n: 0, hits: new Map(), ang: rand(0, 6.28) };
+    P, x, hold: SHEET_PROP.has(r.sp.id) && RAT_RIGS[r.sp.id] ? null : prop || a.prop || ACT_HOLD[r.sp.id] || null, hitT: 0, n: 0, hits: new Map(), ang: rand(0, 6.28) };
   r.actCD = ACT_CD;
   if (a.type === 'ball') { const s = 620; r.vx = Math.cos(r.act.ang) * s; r.vy = Math.sin(r.act.ang) * s; }
   if (a.type === 'tornado') { r.act.dir = rand(0, 6.28); }

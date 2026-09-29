@@ -870,7 +870,7 @@ function addRamp(n) {
   S.rampProg += n;
   while (S.rampProg >= rampNeed(S.ramp)) {
     S.rampProg -= rampNeed(S.ramp); S.ramp++;
-    bigBanner(`🔥 난동 등급 ${S.ramp}!`, '높은 등급 쥐가 태어날 확률이 올랐다', '#f0c878');
+    if (!G.ult && !G.sj) bigBanner(`🔥 난동 등급 ${S.ramp}!`, '높은 등급 쥐가 태어날 확률이 올랐다', '#f0c878');   // 필살기·슈퍼 점프 연출은 가리지 않음
     Sfx.clear();
   }
 }
@@ -1040,7 +1040,7 @@ function render() {
     ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(0, 0, 14 + (1 - k) * 8, 0, 6.28); ctx.fill(); ctx.restore();
   }
   ctx.fillStyle = 'rgba(30,15,5,.2)';
-  for (const it of G.items) if (onScreen(it.x, it.y, 40)) { const k = 1 - Math.min(0.5, it.z / 500); ctx.beginPath(); ctx.ellipse(it.x, it.y + it.r * 0.2, it.r * k, it.r * 0.85 * k, 0, 0, 6.28); ctx.fill(); }
+  for (const it of G.items) if (!it.noShadow && onScreen(it.x, it.y, 40)) { const k = 1 - Math.min(0.5, it.z / 500); ctx.beginPath(); ctx.ellipse(it.x, it.y + it.r * 0.2, it.r * k, it.r * 0.85 * k, 0, 0, 6.28); ctx.fill(); }
   for (const r of G.rats) if (onScreen(r.x, r.y)) { const w = ratR(r) * 1.6 * (1 - Math.min(0.7, r.z / 500)); ctx.beginPath(); ctx.ellipse(r.x, r.y, w, w * 0.6, 0, 0, 6.28); ctx.fill(); }
   for (const b of G.bombs) if (b.meteor && onScreen(b.x, b.y)) { ctx.globalAlpha = 0.25 + 0.4 * (1 - b.z / 900); ctx.beginPath(); ctx.ellipse(b.x, b.y, b.rad * 0.6, b.rad * 0.6, 0, 0, 6.28); ctx.fill(); ctx.globalAlpha = 1; }
   for (const p of G.parcels) if (onScreen(p.x, p.y)) { ctx.globalAlpha = Math.max(0.2, 1 - p.z / 700); ctx.beginPath(); ctx.ellipse(p.x, p.y, 20, 16, 0, 0, 6.28); ctx.fill(); ctx.globalAlpha = 1; }
@@ -1053,6 +1053,7 @@ function render() {
   for (const w of walls) if (w.di) drawWallSeg(w); else list.push({ y: w.y + (w.dj < 0 ? -1 : 1), f: () => drawWallSeg(w) });
   for (const it of G.items) if (onScreen(it.x, it.y, 60)) list.push({ y: it.y, f: () => drawItem25(it) });
   for (const r of G.rats) if (onScreen(r.x, r.y)) list.push({ y: r.y, f: () => drawRat(r) });
+  if (G.ult && G.ult.phase === 'act' && G.ult.eng.sorted) for (const e of G.ult.eng.sorted(G.ult)) list.push(e);   // 필살기 소품(탁자·자동차·무대)도 앞뒤 순서대로
   for (const p of G.parcels) if (onScreen(p.x, p.y)) list.push({ y: p.y, f: () => drawParcel(p) });
   for (const p of G.pickups) if (onScreen(p.x, p.y)) list.push({ y: p.y, f: () => drawPickup(p) });
   list.sort((a, b) => a.y - b.y);
