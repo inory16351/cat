@@ -55,9 +55,9 @@ const STYLE = 'Flat minimalist illustration in the style of "Untitled Goose Game
 
 export function artList() {
   const list = [];
-  for (const [id, emoji, desc] of PROPS) list.push({ kind: 'prop', id, emoji, folder: 'Props', prompt: `${STYLE}\nAsset: a single small game prop sprite: ${desc}. Gentle three-quarter side view, the object alone, centered, filling about 80% of the frame, readable at small size.\nCanvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
-  for (const [id, emoji, desc] of FX) list.push({ kind: 'fx', id, emoji, folder: 'FX', prompt: `${STYLE}\nAsset: a single small game effect / projectile sprite: ${desc}. The object alone, centered, filling about 80% of the frame, readable at small size.\nCanvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
-  for (const [id, emoji, desc] of ULT_FX) list.push({ kind: 'fx', id, emoji, folder: 'FX', prompt: `${STYLE}
+  for (const [id, emoji, desc] of PROPS) list.push({ kind: 'prop', id, emoji, desc, folder: 'Props', prompt: `${STYLE}\nAsset: a single small game prop sprite: ${desc}. Gentle three-quarter side view, the object alone, centered, filling about 80% of the frame, readable at small size.\nCanvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
+  for (const [id, emoji, desc] of FX) list.push({ kind: 'fx', id, emoji, desc, folder: 'FX', prompt: `${STYLE}\nAsset: a single small game effect / projectile sprite: ${desc}. The object alone, centered, filling about 80% of the frame, readable at small size.\nCanvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
+  for (const [id, emoji, desc] of ULT_FX) list.push({ kind: 'fx', id, emoji, desc, folder: 'FX', prompt: `${STYLE}
 Asset: a single game visual effect sprite: ${desc}. The effect alone, centered, filling about 85% of the frame.
 Canvas: square 1024x1024, fully transparent background. No text, no border.` });
   return list;

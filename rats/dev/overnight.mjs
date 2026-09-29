@@ -73,4 +73,15 @@ await run('gen_art.mjs', ['--process-only']);
 await run('build.mjs');
 const done = remaining();
 log(`끝! 시트 ${readdirSync(path.join(ROOT, 'UnityResources', 'Rats', 'Sheets')).length}장 · 남은 것 ${JSON.stringify(done)}`);
+// 결과를 현재 브랜치에 커밋 (push 는 안 함)
+const git = args => new Promise(res => execFile('git', args, { cwd: ROOT }, (e, out, err) => res({ ok: !e, out: out + err })));
+await git(['add', '-A']);
+const msg = `쥐들의 반란: 야간 Codex 이미지 생성 (쥐 파츠 시트·특수 액션 소품·필살기 소품)\n\n남은 것: 시트 ${done.sheets}장, 소품·이펙트 ${done.art}장\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
+const c = await git(['commit', '-m', msg]);
+log(c.ok ? '커밋 완료' : `커밋 안 됨: ${c.out.trim().split('\n').pop()}`);
+// 현재 브랜치를 원격에 push (로그인 창이 뜨지 않게, 실패하면 로그만 남김)
+process.env.GIT_TERMINAL_PROMPT = '0';
+const br = (await git(['rev-parse', '--abbrev-ref', 'HEAD'])).out.trim();
+const p = await git(['push', 'origin', br]);
+log(p.ok ? `push 완료 (origin/${br})` : `push 실패 — 아침에 직접 push 해 주세요: ${p.out.trim().split('\n').pop()}`);
 process.exit(0);
