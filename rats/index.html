@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>쥐들의 반란</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=14">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- 상단 HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-money">
+      <div class="money">🧀 <b id="cheese">0</b></div>
+      <div class="ips"><span id="ips">0</span> /초</div>
+    </div>
+    <div class="hud-level">
+      <div class="lvl-line"><b id="ramp">난동 등급 0</b> · <span id="zone"></span></div>
+      <div class="bar"><i id="rampBar"></i></div>
+      <div class="lvl-sub" id="rampSub"></div>
+    </div>
+    <div class="hud-cats">
+      <div>🐀 <b id="popN">3/30</b></div>
+      <div class="sub">도감 <span id="dexN">3/54</span></div>
+    </div>
+  </div>
+
+  <!-- 하단 도크 -->
+  <div id="dock" class="hidden">
+    <button id="btnSkills" class="dock-btn">🌳<span>스킬</span><em id="skBadge" class="badge hidden">0</em></button>
+    <button id="btnPromo" class="dock-btn">⬆️<span>승급</span><em id="prBadge" class="badge hidden">!</em></button>
+    <button id="btnDex" class="dock-btn">📖<span>도감</span><em id="dexBadge" class="badge hidden">N</em></button>
+    <button id="btnMute" class="dock-btn small">🔊</button>
+    <button id="btnReset2" class="dock-btn small" title="초기화">🗑️</button>
+  </div>
+  <div id="hint" class="hint hidden">🐀 쥐들은 알아서 뛰어다니며 부수고, 서로 부딪히면 번식해요 · 클릭하면 총공격! (돌진 중엔 번식 안 함) · 종마다 특수 능력이 달라요 — 🌳 스킬에서 키워보세요</div>
+  <div id="toasts"></div>
+
+  <!-- 신종 탄생 -->
+  <div id="newcat" class="screen hidden">
+    <div class="panel newcat-card pop">
+      <div class="nc-top" id="ncTop">🎉 신종 쥐 발견! 🎉</div>
+      <div id="ncPic"></div>
+      <span id="ncRar" class="rar"></span>
+      <h2 id="ncName"></h2>
+      <p id="ncDesc"></p>
+      <button id="ncOk" class="big">찍찍!</button>
+    </div>
+  </div>
+
+  <!-- 초기화 확인 -->
+  <div id="resetAsk" class="screen hidden">
+    <div class="panel pop unlock-card">
+      <h2>🗑️ 정말 초기화할까요?</h2>
+      <p>치즈, 강화, 도감, 탈출 기록이 전부 사라지고<br>연구실 쥐 세 마리부터 다시 시작해요.</p>
+      <div class="row-btns"><button id="rsNo" class="mini">취소</button><button id="rsYes" class="big danger">초기화</button></div>
+    </div>
+  </div>
+
+  <!-- 시작 화면 -->
+  <div id="start" class="screen">
+    <div class="start-card">
+      <img id="titleArt" src="../assets/rats/title.png" alt="" onerror="this.style.display='none'">
+      <div class="start-side">
+        <h1>쥐들의 <span>반란</span></h1>
+        <div class="mode">비밀 연구실 탈출기</div>
+        <p>실험실 쥐 <b>세 마리</b>가 탈출을 꿈꾼다.<br>부딪히면 번식, 부수면 치즈.<br>벽을 뚫고 인간 세상을 정복하라!</p>
+        <button id="btnStart" class="big">반란 시작!</button>
+        <button id="btnReset" class="mini reset-btn">🗑️ 초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오프라인 보상 -->
+  <div id="offline" class="screen hidden">
+    <div class="panel pop">
+      <h2>🌙 인간들이 자는 동안…</h2>
+      <p id="offText"></p>
+      <div class="big-num">🧀 <b id="offGain">0</b></div>
+      <button id="offOk" class="big">받기</button>
+    </div>
+  </div>
+
+  <!-- 스킬 트리 -->
+  <div id="tree" class="screen hidden">
+    <div class="panel-head">
+      <h2>🌳 스킬 트리</h2>
+      <div id="treeTabs" class="tabs"></div>
+      <div class="money chip">🧀 <b class="cheese-live">0</b></div>
+      <button class="close">✕</button>
+    </div>
+    <div class="tree-body">
+      <div id="treeArea"></div>
+      <div class="detail panel">
+        <div id="dIcon" class="d-ic"></div>
+        <div id="dName" class="d-name"></div>
+        <div id="dLv" class="d-lv"></div>
+        <div id="dDesc" class="d-desc"></div>
+        <div class="amt">
+          <button data-amt="1" class="mini on">×1</button><button data-amt="10" class="mini">×10</button><button data-amt="max" class="mini">MAX</button>
+        </div>
+        <button id="dBuy" class="big"></button>
+        <p class="d-tip">노드를 한 번 더 클릭해도 구매돼요</p>
+      </div>
+    </div>
+  </div>
+  <div id="fxLayer"></div>
+
+  <!-- 승급 -->
+  <div id="promo" class="screen hidden">
+    <div class="panel-head">
+      <h2>⬆️ 승급 의식</h2>
+      <div class="dex-sum">같은 등급 10마리를 희생 → 윗등급 쥐 1마리 (무작위)</div>
+      <button class="close">✕</button>
+    </div>
+    <div id="odds" class="odds"></div>
+    <div id="prList" class="list promo-list"></div>
+  </div>
+
+  <!-- 도감 -->
+  <div id="dex" class="screen hidden">
+    <div class="panel-head">
+      <h2>📖 쥐 도감</h2>
+      <div class="dex-sum" id="dexSum"></div>
+      <button class="close">✕</button>
+    </div>
+    <div class="dex-body">
+      <div id="dexGrid"></div>
+      <div id="dexDetail" class="panel"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/audio.js?v=14"></script>
+<script src="../js/draw.js?v=14"></script>
+<script src="../idle/js/data.js?v=14"></script>
+<script src="../idle/js/citydraw.js?v=14"></script>
+<script src="js/data.js?v=14"></script>
+<script src="js/labdraw.js?v=14"></script>
+<script src="js/rodent.js?v=14"></script>
+<script src="js/game.js?v=14"></script>
+<script src="js/ui.js?v=14"></script>
+<script>
+  loadSave();
+  const fit = () => {
+    const wrap = document.getElementById('wrap');
+    const w = Math.min(window.innerWidth, window.innerHeight * 16 / 9);
+    wrap.style.width = w + 'px';
+    wrap.style.height = (w * 9 / 16) + 'px';
+    wrap.style.fontSize = (w / 1280 * 16) + 'px';
+    resizeCanvas();
+  };
+  window.addEventListener('resize', fit);
+  fit();
+  initWorld();
+  UI.init();
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>
