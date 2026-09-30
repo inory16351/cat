@@ -594,6 +594,7 @@ function drawHuman(h) {
   ctx.globalAlpha = clamp(h.alpha, 0, 1);
   ctx.translate(h.x + (h.jit ? rand(-h.jit, h.jit) : 0), h.y * TILT - h.z - P.bob);
   if (h.state === 'fly' || h.state === 'dying') { ctx.translate(0, -HUMAN_H * sc * 0.45); ctx.rotate(h.rot); ctx.translate(0, HUMAN_H * sc * 0.45); }
+  else if (h.sjRot) { ctx.translate(0, -HUMAN_H * sc * 0.45); ctx.rotate(h.sjRot); ctx.translate(0, HUMAN_H * sc * 0.45); }   // 슈퍼 점프로 둥실 떠서 기우뚱
   ctx.scale(-h.face * sc * P.sx / Math.sqrt(h.sq || 1), sc * P.sy * (h.sq || 1));    // 통통 튈 때 납작           // 그림은 왼쪽을 봄
   if (!M || !HIMG[id + '/torso']) drawHumanFallback(h, P);
   else {

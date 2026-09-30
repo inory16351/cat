@@ -25,7 +25,7 @@ function startSuperJump(forced) {
   r.trick = null; r.sleep = 0; r.vx = r.vy = r.vz = 0; r.z = 0; r.rushT = 0; r.bite = 0; r.speed = 0;
   for (const o of G.rats) if (o.act) endAct(o);
   G.bullets = [];
-  G.sj = { r, phase: 'cutin', t: 0, zoom: 1, lineT: -1, lines: [], beat: 0, items: [], floaters: [], walls: [] };
+  G.sj = { r, phase: 'cutin', t: 0, zoom: 1, lineT: -1, lines: [], beat: 0, items: [], floaters: [], actors: [], walls: [] };
   G.sjCool = SJ_COOL; G.rush = null; G.banner = null; G.hitstop = 0;
   flash('#fff', 0.5); Sfx.comboWord(); Sfx.crit();
   return true;
@@ -90,6 +90,8 @@ function updateSuperJump(dt) {
         o.pose = { front: Math.sin(G.t * 14 + f.ph) * 1.4, farFront: Math.cos(G.t * 12 + f.ph) * 1.4, back: Math.sin(G.t * 13 + f.ph + 2) * 1.3, farBack: Math.cos(G.t * 11 + f.ph) * 1.3, head: -0.3, tail: 1.2 + Math.sin(G.t * 9) * 0.3 };
         o.sjRot = Math.sin(G.t * 2 + f.ph) * 0.5 * e;
       }
+      // 사람·고양이도 둥실 (허우적대며 기우뚱)
+      for (const f of s.actors) { const a = f.a, e = sjEase((s.t - f.d) / 0.6); a.z = f.z0 + f.h * e + Math.sin(G.t * 3 + f.ph) * 6 * e; a.sjRot = Math.sin(G.t * 2.2 + f.ph) * 0.35 * e; a.jit = 1.5 * e; }
       for (const w of s.walls) G.wallShake[w.key] = 1;
       G.shake = Math.max(G.shake, 0.12);
       if (k >= 1) sjBoom(s);
@@ -101,6 +103,11 @@ function updateSuperJump(dt) {
         if (o.z > 0 || o.vz > 0) { o.vz -= 1400 * dt; o.z = Math.max(0, o.z + o.vz * dt); if (o.z <= 0) { if (o.vz < -300) { o.vz *= -0.3; if (onScreen(o.x, o.y)) dust(o.x, o.y, 2, 0.5); } else o.vz = 0; } }
         if (o.z <= 0 && o.vz === 0 && !f.land) { f.land = true; o.pose = null; o.sjRot = 0; o.sq = 0.6; }
         if (o.pose) o.sjRot *= 0.9;
+      }
+      // 사람·고양이: 날아간 건 계속 날고, 남은 건 떨어져 착지
+      for (const f of s.actors) {
+        const a = f.a; a.jit = 0; a.sjRot = (a.sjRot || 0) * 0.9;
+        if (a.z > 0 || a.vz > 0) { a.vz = (a.vz || 0) - 1500 * dt; a.z = Math.max(0, a.z + a.vz * dt); if (a.z <= 0 && a.state !== 'fly' && a.state !== 'flung') { a.vz = 0; if (onScreen(a.x, a.y)) dust(a.x, a.y, 3, 0.7); } }
       }
       // 발동한 쥐: 짠! 승리 포즈
       r.pose = s.t < 0.6 ? { front: 2.6, farFront: 2.3, back: -0.2, farBack: 0.2, head: -0.35, tail: 1.3, tilt: -0.35, bob: 0, sx: 1, sy: 1 } : null;
@@ -129,6 +136,10 @@ function sjImpact(s) {
     o.trick = null; o.sleep = 0; o.vx = o.vy = o.vz = 0; o.rushT = 0;
     s.floaters.push({ r: o, h: rand(90, 200), d: Math.hypot(o.x - r.x, o.y - r.y) / 1600, ph: rand(0, 6) });
   }
+  // 화면 안 사람·고양이도 둥실 (터질 때 날아감)
+  for (const h of G.humans) if (inRect(h.x, h.y, vr) && h.appear >= 1 && h.state !== 'dead' && h.state !== 'dying' && h.state !== 'splat') s.actors.push({ a: h, z0: Math.max(0, h.z || 0), h: rand(110, 210) * (h.boss ? 0.5 : 1), d: Math.hypot(h.x - r.x, h.y - r.y) / 1600, ph: rand(0, 6) });
+  const c = G.cat; if (c && inRect(c.x, c.y, vr) && c.state !== 'leave' && c.state !== 'flung') s.actors.push({ a: c, z0: Math.max(0, c.z || 0), h: rand(120, 200), d: Math.hypot(c.x - r.x, c.y - r.y) / 1600, ph: rand(0, 6) });
+  for (const f of s.actors) f.a.vz = 0;
   // 화면에 걸친 벽 (막힌 벽만)
   for (const w of visibleWalls()) {
     if (w.solid) continue;                       // 연구소 바깥벽은 못 부숨
@@ -172,6 +183,7 @@ function sjBoom(s) {
 }
 function sjEnd(s) {
   for (const f of s.floaters) { f.r.z = 0; f.r.vz = 0; f.r.pose = null; f.r.sjRot = 0; }
+  for (const f of s.actors) { f.a.sjRot = 0; f.a.jit = 0; }
   s.r.pose = null; s.r.sjRot = 0; s.r.jit = 0;
   stopDash(s.r, 0.3, 0.6);
   G.sj = null;

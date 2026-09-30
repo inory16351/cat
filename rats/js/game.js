@@ -1406,8 +1406,7 @@ function drawRat(r) {
   if (r.stun > 0 && !tr) ctx.scale(1.15, 0.72);                   // 기절: 납작
   if (r.pose && r.pose.spinX !== undefined) { const c = r.pose.spinX; ctx.scale((c < 0 ? -1 : 1) * Math.max(0.12, Math.abs(c)), 1); }   // 세로축 회전 (쥐커드 트리플 악셀)
   const rig = RAT_RIGS[r.sp.id], SP = r.pose && r.pose.sprite && IMG['art_' + r.pose.sprite];
-  if (r.pose && r.pose.jw && jwReady()) drawBowRig(r.pose);          // 줴리 필살기 턱시도 인사 리그 (jwrig.js, 옆모습이라 좌우 뒤집기 그대로)
-  else if (r.pose && r.pose.fr && frontReady(r.pose.fr)) {             // 필살기 전용 앞모습 리그 (람쥐썬더, frontrig.js)
+  if (r.pose && r.pose.fr && frontReady(r.pose.fr)) {             // 필살기 전용 앞모습 리그 (람쥐썬더, frontrig.js)
     ctx.save(); ctx.scale(-r.face, 1); ctx.rotate(r.pose.spriteRot || 0); drawFrontRig(r.pose); ctx.restore();
   }
   else if (SP) {                                                   // (앞모습 파츠가 없을 때) 예전 한 장짜리 앞모습 그림

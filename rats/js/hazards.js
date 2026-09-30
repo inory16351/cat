@@ -291,6 +291,7 @@ function drawCat(c) {
   ctx.fillStyle = 'rgba(30,15,5,.2)'; ctx.beginPath(); ctx.ellipse(c.x, c.y * TILT, 46, 14, 0, 0, 6.28); ctx.fill();
   ctx.translate(c.x + (c.jit ? rand(-c.jit, c.jit) : 0), c.y * TILT - c.z - Math.abs(Math.sin(c.walk)) * 4);
   if (c.state === 'flung' || c.state === 'roll') { ctx.translate(0, -30); ctx.rotate(c.rot); ctx.translate(0, 30); }
+  else if (c.sjRot) { ctx.translate(0, -30); ctx.rotate(c.sjRot); ctx.translate(0, 30); }   // 슈퍼 점프로 둥실
   ctx.scale(-c.face, 1);
   const rig = CAT_RIGS[c.kind];
   const mode = c.state === 'pounce' ? 'pounce' : c.state === 'flung' ? 'flung' : c.state === 'roll' ? 'crouch' : c.castT > 0 ? 'cast' : (c.state === 'prowl' && c.cd > 0 && c.cd < 0.4) ? 'crouch' : 'walk';

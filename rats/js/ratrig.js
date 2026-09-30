@@ -125,8 +125,31 @@ function ratPose(r) {
 // 발끝 = 원점 좌표계에 조립해서 그림. s = 게임 단위 배율
 // 안경 쓴 종: 머리 그림 안 가까운 눈 위치(x,y)·알 크기(r, 가로 비율)·안경다리 끝(ax,ay)
 const RIG_GLASSES = { streamrat: { x: 0.4, y: 0.47, r: 0.075, ax: 0.6, ay: 0.4 } };
+// 턱시도 (줴리 필살기 "감사합니다"): 원래 파츠 그림 위에 코드로 옷을 칠함 → 실루엣·크기·얼굴이 평소 줴리와 똑같음
+//  몸통: 크림색(배) → 흰 셔츠, 나머지 털 → 검은 재킷 / 앞다리: 위 70% 소매 + 흰 소맷부리, 발은 그대로 / 뒷다리: 위 66% 바지
+function tuxCopy(img, kind) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  let d; try { d = g.getImageData(0, 0, c.width, c.height); } catch (_) { return img; }
+  const a = d.data, W = c.width, H = c.height;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4; if (a[i + 3] < 8) continue;
+    const r = a[i], gg = a[i + 1], b = a[i + 2], sh = (r + gg + b) / 3 / 200;   // 원래 명암 조금 살림
+    const k = y / H, jacket = () => { a[i] = 40 * sh + 8; a[i + 1] = 34 * sh + 6; a[i + 2] = 46 * sh + 8; }, shirt = () => { a[i] = 247; a[i + 1] = 243; a[i + 2] = 236; };
+    if (kind === 'torso') { if (r > 210 && gg > 170 && b > 120) shirt(); else jacket(); }
+    else if (kind === 'front') { if (k < 0.7) jacket(); else if (k < 0.77) shirt(); }
+    else if (kind === 'back') { if (k < 0.66) jacket(); }
+  }
+  g.putImageData(d, 0, 0); return c;
+}
+function tuxRig(rig) {
+  if (rig.tux) return rig.tux;
+  const I = rig.imgs, t = { ...I, torso: tuxCopy(I.torso, 'torso'), front: I.front && tuxCopy(I.front, 'front'), back: I.back && tuxCopy(I.back, 'back') };
+  t.farFront = t.front && darkerCopy(t.front, 0.22); t.farBack = t.back && darkerCopy(t.back, 0.22);
+  return (rig.tux = t);
+}
 function drawRatRig(rig, s, pose, g = ctx) {
-  const I = rig.imgs, P = rig.pivot, L = rig.legScale;
+  const TX = pose.tux ? tuxRig(rig) : null, I = TX || rig.imgs, P = rig.pivot, L = rig.legScale, FF = TX ? TX.farFront : rig.farFront, FB = TX ? TX.farBack : rig.farBack;
   const part = (img, anchor, pivot, ang, dx = 0, dy = 0, sc = 1) => {
     if (!img) return;
     g.save(); g.translate(anchor[0] + dx, anchor[1] + dy); g.rotate(ang); g.scale(sc, sc);
@@ -156,24 +179,34 @@ function drawRatRig(rig, s, pose, g = ctx) {
   // 먼 쪽 다리(어둡게)·꼬리는 몸통 뒤, 가까운 쪽 다리는 몸통 위에 겹쳐서 허벅지·어깨가 몸에 붙어 보이게
   const crouch = pose.crouch && FX.rss_leg_crouch && I.back;
   if (crouch) { g.save(); g.globalAlpha = 1; g.filter = 'brightness(0.8)'; extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.farBack, gap); g.restore(); }
-  else part(rig.farBack, rig.hip, P.back, pose.farBack, gap, 0, L.back);
+  else part(FB, rig.hip, P.back, pose.farBack, gap, 0, L.back);
   // 망토 (필살기 토르 코스프레): 몸통 뒤에서 뒤로 펄럭. 걸쇠(그림 왼쪽 위)를 목에
   if (pose.cape && IMG['art_ult:thor_cape']) {
     const im = IMG['art_ult:thor_cape'], cw = I.torso.width * 1.25 * pose.cape, ch = cw * im.height / im.width, fl = 1 + Math.sin(G.t * 14) * 0.06;
     g.save(); g.translate(rig.neck[0] + I.torso.width * 0.05, rig.neck[1] + I.torso.height * 0.1); g.rotate(-0.15 + Math.sin(G.t * 9) * 0.05); g.scale(fl, 1 / fl); g.drawImage(im, -cw * 0.1, -ch * 0.12, cw, ch); g.restore();
   }
-  part(rig.farFront, rig.shoulder, P.front, pose.farFront, gap, 0, L.front);
+  part(FF, rig.shoulder, P.front, pose.farFront, gap, 0, L.front);
   if (pose.prop2 && I.front) {                       // 뒤쪽 앞발 소품 (쌍권총)
     const len = I.front.height * (1 - P.front[1]) * L.front * 0.9, a = pose.farFront;
     g.save(); g.translate(rig.shoulder[0] + gap - Math.sin(a) * len, rig.shoulder[1] + Math.cos(a) * len); g.rotate(a * 0.5 + (pose.propRot2 ?? pose.propRot ?? 0)); drawProp(g, pose.prop2, (pose.propSize || 15) * u); g.restore();
   }
   part(I.tail, rig.tail, P.tail, -pose.tail);
+  if (TX) {
+    // 연미복 꼬리 (엉덩이 뒤로 두 갈래) — 몸통 좌표라 서 있으면 아래로 늘어짐
+    const [tx, ty] = rig.tail, T = I.torso, cw = T.width * 0.34;
+    g.fillStyle = '#231e29'; g.beginPath(); g.moveTo(tx - T.width * 0.12, ty - T.height * 0.12); g.lineTo(tx + cw, ty + T.height * 0.05); g.lineTo(tx + cw * 0.7, ty + T.height * 0.2); g.lineTo(tx + cw * 0.95, ty + T.height * 0.34); g.lineTo(tx - T.width * 0.1, ty + T.height * 0.28); g.closePath(); g.fill();
+  }
   g.drawImage(I.torso, rig.torso[0], rig.torso[1]);
   if (crouch) extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.back);
   else part(I.back, rig.hip, P.back, pose.back, 0, 0, L.back * (pose.kickLeg ? 1.1 : 1));
   const armUp = pose.armUp && FX[pose.armUp] && I.front;       // 'rss_arm_up' | 'rss_arm_up2' = 팔꿈치 굽혀 머리 위로 번쩍 (람쥐썬더)
   const raised = pose.front > 0.9 || armUp;                    // 치켜든 앞발은 얼굴 앞으로
   if (!raised) part(I.front, rig.shoulder, P.front, pose.front, 0, 0, L.front);
+  if (TX && typeof FR_IMG !== 'undefined' && FR_IMG.jwc_bowtie) {
+    // 나비넥타이: 목 앞(배 쪽), 세상 기준으로 똑바로
+    const bt = FR_IMG.jwc_bowtie, T = I.torso, bw = T.width * 0.3, bh = bw * bt.height / bt.width;
+    g.save(); g.translate(rig.neck[0] + T.width * 0.1, rig.neck[1] + T.height * 0.3); g.rotate(pose.tilt); g.drawImage(bt, -bw / 2, -bh / 2, bw, bh); g.restore();
+  }
   part(I.head, rig.neck, P.head, -pose.head, (pose.headX || 0) * u, (pose.headY || 0) * u, rig.headScale);
   // 투구 (필살기 토르 코스프레): 머리 위
   if (pose.helm && I.head && IMG['art_ult:thor_helm']) {

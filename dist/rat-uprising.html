@@ -2425,8 +2425,31 @@ function ratPose(r) {
 // 발끝 = 원점 좌표계에 조립해서 그림. s = 게임 단위 배율
 // 안경 쓴 종: 머리 그림 안 가까운 눈 위치(x,y)·알 크기(r, 가로 비율)·안경다리 끝(ax,ay)
 const RIG_GLASSES = { streamrat: { x: 0.4, y: 0.47, r: 0.075, ax: 0.6, ay: 0.4 } };
+// 턱시도 (줴리 필살기 "감사합니다"): 원래 파츠 그림 위에 코드로 옷을 칠함 → 실루엣·크기·얼굴이 평소 줴리와 똑같음
+//  몸통: 크림색(배) → 흰 셔츠, 나머지 털 → 검은 재킷 / 앞다리: 위 70% 소매 + 흰 소맷부리, 발은 그대로 / 뒷다리: 위 66% 바지
+function tuxCopy(img, kind) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  let d; try { d = g.getImageData(0, 0, c.width, c.height); } catch (_) { return img; }
+  const a = d.data, W = c.width, H = c.height;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4; if (a[i + 3] < 8) continue;
+    const r = a[i], gg = a[i + 1], b = a[i + 2], sh = (r + gg + b) / 3 / 200;   // 원래 명암 조금 살림
+    const k = y / H, jacket = () => { a[i] = 40 * sh + 8; a[i + 1] = 34 * sh + 6; a[i + 2] = 46 * sh + 8; }, shirt = () => { a[i] = 247; a[i + 1] = 243; a[i + 2] = 236; };
+    if (kind === 'torso') { if (r > 210 && gg > 170 && b > 120) shirt(); else jacket(); }
+    else if (kind === 'front') { if (k < 0.7) jacket(); else if (k < 0.77) shirt(); }
+    else if (kind === 'back') { if (k < 0.66) jacket(); }
+  }
+  g.putImageData(d, 0, 0); return c;
+}
+function tuxRig(rig) {
+  if (rig.tux) return rig.tux;
+  const I = rig.imgs, t = { ...I, torso: tuxCopy(I.torso, 'torso'), front: I.front && tuxCopy(I.front, 'front'), back: I.back && tuxCopy(I.back, 'back') };
+  t.farFront = t.front && darkerCopy(t.front, 0.22); t.farBack = t.back && darkerCopy(t.back, 0.22);
+  return (rig.tux = t);
+}
 function drawRatRig(rig, s, pose, g = ctx) {
-  const I = rig.imgs, P = rig.pivot, L = rig.legScale;
+  const TX = pose.tux ? tuxRig(rig) : null, I = TX || rig.imgs, P = rig.pivot, L = rig.legScale, FF = TX ? TX.farFront : rig.farFront, FB = TX ? TX.farBack : rig.farBack;
   const part = (img, anchor, pivot, ang, dx = 0, dy = 0, sc = 1) => {
     if (!img) return;
     g.save(); g.translate(anchor[0] + dx, anchor[1] + dy); g.rotate(ang); g.scale(sc, sc);
@@ -2456,24 +2479,34 @@ function drawRatRig(rig, s, pose, g = ctx) {
   // 먼 쪽 다리(어둡게)·꼬리는 몸통 뒤, 가까운 쪽 다리는 몸통 위에 겹쳐서 허벅지·어깨가 몸에 붙어 보이게
   const crouch = pose.crouch && FX.rss_leg_crouch && I.back;
   if (crouch) { g.save(); g.globalAlpha = 1; g.filter = 'brightness(0.8)'; extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.farBack, gap); g.restore(); }
-  else part(rig.farBack, rig.hip, P.back, pose.farBack, gap, 0, L.back);
+  else part(FB, rig.hip, P.back, pose.farBack, gap, 0, L.back);
   // 망토 (필살기 토르 코스프레): 몸통 뒤에서 뒤로 펄럭. 걸쇠(그림 왼쪽 위)를 목에
   if (pose.cape && IMG['art_ult:thor_cape']) {
     const im = IMG['art_ult:thor_cape'], cw = I.torso.width * 1.25 * pose.cape, ch = cw * im.height / im.width, fl = 1 + Math.sin(G.t * 14) * 0.06;
     g.save(); g.translate(rig.neck[0] + I.torso.width * 0.05, rig.neck[1] + I.torso.height * 0.1); g.rotate(-0.15 + Math.sin(G.t * 9) * 0.05); g.scale(fl, 1 / fl); g.drawImage(im, -cw * 0.1, -ch * 0.12, cw, ch); g.restore();
   }
-  part(rig.farFront, rig.shoulder, P.front, pose.farFront, gap, 0, L.front);
+  part(FF, rig.shoulder, P.front, pose.farFront, gap, 0, L.front);
   if (pose.prop2 && I.front) {                       // 뒤쪽 앞발 소품 (쌍권총)
     const len = I.front.height * (1 - P.front[1]) * L.front * 0.9, a = pose.farFront;
     g.save(); g.translate(rig.shoulder[0] + gap - Math.sin(a) * len, rig.shoulder[1] + Math.cos(a) * len); g.rotate(a * 0.5 + (pose.propRot2 ?? pose.propRot ?? 0)); drawProp(g, pose.prop2, (pose.propSize || 15) * u); g.restore();
   }
   part(I.tail, rig.tail, P.tail, -pose.tail);
+  if (TX) {
+    // 연미복 꼬리 (엉덩이 뒤로 두 갈래) — 몸통 좌표라 서 있으면 아래로 늘어짐
+    const [tx, ty] = rig.tail, T = I.torso, cw = T.width * 0.34;
+    g.fillStyle = '#231e29'; g.beginPath(); g.moveTo(tx - T.width * 0.12, ty - T.height * 0.12); g.lineTo(tx + cw, ty + T.height * 0.05); g.lineTo(tx + cw * 0.7, ty + T.height * 0.2); g.lineTo(tx + cw * 0.95, ty + T.height * 0.34); g.lineTo(tx - T.width * 0.1, ty + T.height * 0.28); g.closePath(); g.fill();
+  }
   g.drawImage(I.torso, rig.torso[0], rig.torso[1]);
   if (crouch) extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.back);
   else part(I.back, rig.hip, P.back, pose.back, 0, 0, L.back * (pose.kickLeg ? 1.1 : 1));
   const armUp = pose.armUp && FX[pose.armUp] && I.front;       // 'rss_arm_up' | 'rss_arm_up2' = 팔꿈치 굽혀 머리 위로 번쩍 (람쥐썬더)
   const raised = pose.front > 0.9 || armUp;                    // 치켜든 앞발은 얼굴 앞으로
   if (!raised) part(I.front, rig.shoulder, P.front, pose.front, 0, 0, L.front);
+  if (TX && typeof FR_IMG !== 'undefined' && FR_IMG.jwc_bowtie) {
+    // 나비넥타이: 목 앞(배 쪽), 세상 기준으로 똑바로
+    const bt = FR_IMG.jwc_bowtie, T = I.torso, bw = T.width * 0.3, bh = bw * bt.height / bt.width;
+    g.save(); g.translate(rig.neck[0] + T.width * 0.1, rig.neck[1] + T.height * 0.3); g.rotate(pose.tilt); g.drawImage(bt, -bw / 2, -bh / 2, bw, bh); g.restore();
+  }
   part(I.head, rig.neck, P.head, -pose.head, (pose.headX || 0) * u, (pose.headY || 0) * u, rig.headScale);
   // 투구 (필살기 토르 코스프레): 머리 위
   if (pose.helm && I.head && IMG['art_ult:thor_helm']) {
@@ -2748,64 +2781,6 @@ function drawLanding(pose, g = ctx) {
   g.restore();
 }
 loadFrontParts();
-
-</script>
-<script>
-'use strict';
-// ───────────────────────── 줴리 필살기 "감사합니다" 턱시도 리그 ─────────────────────────
-// 제리 인사 밈 패러디(원작 디자인은 안 베낌): 옆·반측면(왼쪽을 봄)에서 허리 관절로 상반신을 90도까지 꺾어 인사.
-// 파츠 = rats/dev/gen_front_rig.mjs --set jw (시트 한 장) → FR_IMG / FRONT_PARTS 의 jw_*. 꼬리는 일반 파츠(RAT_RIGS.jwerry)
-// 연결 위치(0~1 비율)는 알파 분석 + 그림 보고 잡음.
-//   up: 상반신(목·허리·어깨) · low: 하반신(허리·엉덩이·꼬리) · leg/arm*: 잘린 면(관절) · head: 목 잘린 면
-const JW_RIG = {                                   // 3차(2등신) 파츠 기준
-  up: { neck: [0.52, 0.04], waist: [0.48, 0.97], shoulder: [0.6, 0.25] },
-  low: { waist: [0.38, 0.04], hip: [0.3, 0.84], tail: [0.75, 0.4] },
-  leg: [0.7, 0.03], arm: [0.63, 0.03], arm_belly: [0.47, 0.03], arm_out: [0.98, 0.46], arm_wave: [0.82, 0.97],
-  head: { jw_head_smug: [0.4, 0.97], jw_head_grin: [0.45, 0.97], jw_head_wink: [0.43, 0.97] },
-};
-// 밈처럼 2등신: 머리는 그대로, 몸(몸통·팔·다리)만 줄임 (파츠를 2등신으로 그려도 몸 합계가 머리의 약 1.9배로 나와서)
-// 2026-10-01 사용자 "인사할 때 얼굴이 너무 큼, 실제 밈처럼": 머리 폭이 몸통의 2.5배였음 → 머리 0.78배·몸 0.72배 (머리 폭 ≈ 몸통 1.7배, 키의 약 36%)
-const JW_BODY_K = 0.72, JW_HEAD_K = 0.78;
-const jwReady = () => !!(FR_IMG.jw_up && FR_IMG.jw_low && FR_IMG.jw_leg && FR_IMG.jw_head_smug);
-// pose = { jw: 1, h: 키, bend: 인사 각도(라디안, + = 앞으로 숙임), head: 'smug'|'grin'|'wink', headRot,
-//          near: 'arm'|'belly'|'out'|'wave' (가까운 팔), nearRot, far: 'arm'|'out'|null (먼 팔), farRot, tail, bob, sx, sy, rose: 발밑 장미 수 }
-function drawBowRig(pose, g = ctx) {
-  const M = FRONT_PARTS, S = id => M[id].size, R = JW_RIG;
-  const BK = JW_BODY_K, sz = id => S(id).map(v => v * BK);
-  const [lw, lh] = sz('jw_low'), [uw, uh] = sz('jw_up'), [gw, gh] = sz('jw_leg'), hd = 'jw_head_' + (pose.head || 'smug'), [hw, hh] = S(hd).map(v => v * JW_HEAD_K);
-  const legH = gh * (1 - R.leg[1]);
-  const unit = (pose.h || 40) / (legH + lh * 0.8 + uh * 0.95 + hh * 0.9);
-  const bend = pose.bend || 0, c = Math.cos(-bend), s = Math.sin(-bend);   // 앞(왼쪽)으로 숙이면 반시계 회전
-  g.save(); g.scale(pose.sx || 1, pose.sy || 1); g.scale(unit, unit); g.translate(0, (pose.bob || 0) / unit);
-  // 하반신: 엉덩이 관절이 다리 길이만큼 위
-  const lx = -R.low.hip[0] * lw, ly = -legH - R.low.hip[1] * lh, LJ = k => [lx + R.low[k][0] * lw, ly + R.low[k][1] * lh];
-  const [wx, wy] = LJ('waist');
-  // 상반신: 허리 잘린 면을 하반신 허리에 맞추고 허리를 축으로 회전
-  const ux = wx - R.up.waist[0] * uw, uy = wy - R.up.waist[1] * uh;
-  const U = ([x, y]) => { const dx = x - wx, dy = y - wy; return [wx + dx * c - dy * s, wy + dx * s + dy * c]; };
-  const UJ = k => U([ux + R.up[k][0] * uw, uy + R.up[k][1] * uh]);
-  const part = (id, [x, y], piv, rot, dark, k = BK) => {           // k: 몸 파츠는 BK, 머리는 1
-    const im = FR_IMG[id]; if (!im) return; const [w, h] = S(id);
-    g.save(); g.translate(x, y); g.rotate(rot); g.scale(k, k); if (dark) g.filter = 'brightness(0.72)';
-    g.drawImage(im, -piv[0] * w, -piv[1] * h, w, h); g.restore();
-  };
-  const armId = k => ({ arm: 'jw_arm', belly: 'jw_arm_belly', out: 'jw_arm_out', wave: 'jw_arm_wave' }[k]), armPiv = k => R[{ arm: 'arm', belly: 'arm_belly', out: 'arm_out', wave: 'arm_wave' }[k]];
-  // 꼬리 (일반 파츠, 몸 뒤로 휘어 올라감)
-  const rig = RAT_RIGS.jwerry, TI = rig && rig.imgs.tail;
-  if (TI) { const P = rig.pivot.tail, [tx, ty] = LJ('tail'), k = lw * 1.1 / TI.width; g.save(); g.translate(tx, ty); g.rotate(-0.5 + (pose.tail || 0)); g.scale(-k, k); g.drawImage(TI, -P[0] * TI.width, -P[1] * TI.height); g.restore(); }
-  // 먼 다리·먼 팔(어둡게) → 하반신 → 가까운 다리 → 상반신 → 머리 → 가까운 팔
-  part('jw_leg', [lx + R.low.hip[0] * lw + lw * 0.14, ly + R.low.hip[1] * lh], R.leg, 0.05, true);
-  if (pose.far) part(armId(pose.far), UJ('shoulder'), armPiv(pose.far), -bend + (pose.farRot || 0), true, BK * 0.95);
-  part('jw_leg', [lx + R.low.hip[0] * lw, ly + R.low.hip[1] * lh], R.leg, -0.03, false);   // 다리 잘린 면(분홍)이 안 보이게 하반신보다 먼저
-  g.drawImage(FR_IMG.jw_low, lx, ly, lw, lh);
-  g.save(); g.translate(wx, wy); g.rotate(-bend); g.translate(-wx, -wy); g.drawImage(FR_IMG.jw_up, ux, uy, uw, uh); g.restore();
-  const [nx, ny] = UJ('neck');
-  part(hd, [nx, ny + uh * 0.08], R.head[hd] || [0.43, 0.97], -bend * 0.85 + (pose.headRot || 0), false, JW_HEAD_K);   // 큰 머리 (몸보다 덜 줄임)
-  // 손 흔드는 팔은 얼굴을 가리지 않게 조금 길게·바깥(앞쪽 위)으로
-  const nw = pose.near === 'wave';
-  part(armId(pose.near || 'arm'), UJ('shoulder'), armPiv(pose.near || 'arm'), -bend + (pose.nearRot || 0) + (nw ? -0.75 : 0), false, nw ? BK * 1.35 : BK);
-  g.restore();
-}
 
 </script>
 <script>
@@ -4232,8 +4207,7 @@ function drawRat(r) {
   if (r.stun > 0 && !tr) ctx.scale(1.15, 0.72);                   // 기절: 납작
   if (r.pose && r.pose.spinX !== undefined) { const c = r.pose.spinX; ctx.scale((c < 0 ? -1 : 1) * Math.max(0.12, Math.abs(c)), 1); }   // 세로축 회전 (쥐커드 트리플 악셀)
   const rig = RAT_RIGS[r.sp.id], SP = r.pose && r.pose.sprite && IMG['art_' + r.pose.sprite];
-  if (r.pose && r.pose.jw && jwReady()) drawBowRig(r.pose);          // 줴리 필살기 턱시도 인사 리그 (jwrig.js, 옆모습이라 좌우 뒤집기 그대로)
-  else if (r.pose && r.pose.fr && frontReady(r.pose.fr)) {             // 필살기 전용 앞모습 리그 (람쥐썬더, frontrig.js)
+  if (r.pose && r.pose.fr && frontReady(r.pose.fr)) {             // 필살기 전용 앞모습 리그 (람쥐썬더, frontrig.js)
     ctx.save(); ctx.scale(-r.face, 1); ctx.rotate(r.pose.spriteRot || 0); drawFrontRig(r.pose); ctx.restore();
   }
   else if (SP) {                                                   // (앞모습 파츠가 없을 때) 예전 한 장짜리 앞모습 그림
@@ -5188,6 +5162,7 @@ function drawHuman(h) {
   ctx.globalAlpha = clamp(h.alpha, 0, 1);
   ctx.translate(h.x + (h.jit ? rand(-h.jit, h.jit) : 0), h.y * TILT - h.z - P.bob);
   if (h.state === 'fly' || h.state === 'dying') { ctx.translate(0, -HUMAN_H * sc * 0.45); ctx.rotate(h.rot); ctx.translate(0, HUMAN_H * sc * 0.45); }
+  else if (h.sjRot) { ctx.translate(0, -HUMAN_H * sc * 0.45); ctx.rotate(h.sjRot); ctx.translate(0, HUMAN_H * sc * 0.45); }   // 슈퍼 점프로 둥실 떠서 기우뚱
   ctx.scale(-h.face * sc * P.sx / Math.sqrt(h.sq || 1), sc * P.sy * (h.sq || 1));    // 통통 튈 때 납작           // 그림은 왼쪽을 봄
   if (!M || !HIMG[id + '/torso']) drawHumanFallback(h, P);
   else {
@@ -5565,6 +5540,7 @@ function drawCat(c) {
   ctx.fillStyle = 'rgba(30,15,5,.2)'; ctx.beginPath(); ctx.ellipse(c.x, c.y * TILT, 46, 14, 0, 0, 6.28); ctx.fill();
   ctx.translate(c.x + (c.jit ? rand(-c.jit, c.jit) : 0), c.y * TILT - c.z - Math.abs(Math.sin(c.walk)) * 4);
   if (c.state === 'flung' || c.state === 'roll') { ctx.translate(0, -30); ctx.rotate(c.rot); ctx.translate(0, 30); }
+  else if (c.sjRot) { ctx.translate(0, -30); ctx.rotate(c.sjRot); ctx.translate(0, 30); }   // 슈퍼 점프로 둥실
   ctx.scale(-c.face, 1);
   const rig = CAT_RIGS[c.kind];
   const mode = c.state === 'pounce' ? 'pounce' : c.state === 'flung' ? 'flung' : c.state === 'roll' ? 'crouch' : c.castT > 0 ? 'cast' : (c.state === 'prowl' && c.cd > 0 && c.cd < 0.4) ? 'crouch' : 'walk';
@@ -5603,7 +5579,7 @@ function startSuperJump(forced) {
   r.trick = null; r.sleep = 0; r.vx = r.vy = r.vz = 0; r.z = 0; r.rushT = 0; r.bite = 0; r.speed = 0;
   for (const o of G.rats) if (o.act) endAct(o);
   G.bullets = [];
-  G.sj = { r, phase: 'cutin', t: 0, zoom: 1, lineT: -1, lines: [], beat: 0, items: [], floaters: [], walls: [] };
+  G.sj = { r, phase: 'cutin', t: 0, zoom: 1, lineT: -1, lines: [], beat: 0, items: [], floaters: [], actors: [], walls: [] };
   G.sjCool = SJ_COOL; G.rush = null; G.banner = null; G.hitstop = 0;
   flash('#fff', 0.5); Sfx.comboWord(); Sfx.crit();
   return true;
@@ -5668,6 +5644,8 @@ function updateSuperJump(dt) {
         o.pose = { front: Math.sin(G.t * 14 + f.ph) * 1.4, farFront: Math.cos(G.t * 12 + f.ph) * 1.4, back: Math.sin(G.t * 13 + f.ph + 2) * 1.3, farBack: Math.cos(G.t * 11 + f.ph) * 1.3, head: -0.3, tail: 1.2 + Math.sin(G.t * 9) * 0.3 };
         o.sjRot = Math.sin(G.t * 2 + f.ph) * 0.5 * e;
       }
+      // 사람·고양이도 둥실 (허우적대며 기우뚱)
+      for (const f of s.actors) { const a = f.a, e = sjEase((s.t - f.d) / 0.6); a.z = f.z0 + f.h * e + Math.sin(G.t * 3 + f.ph) * 6 * e; a.sjRot = Math.sin(G.t * 2.2 + f.ph) * 0.35 * e; a.jit = 1.5 * e; }
       for (const w of s.walls) G.wallShake[w.key] = 1;
       G.shake = Math.max(G.shake, 0.12);
       if (k >= 1) sjBoom(s);
@@ -5679,6 +5657,11 @@ function updateSuperJump(dt) {
         if (o.z > 0 || o.vz > 0) { o.vz -= 1400 * dt; o.z = Math.max(0, o.z + o.vz * dt); if (o.z <= 0) { if (o.vz < -300) { o.vz *= -0.3; if (onScreen(o.x, o.y)) dust(o.x, o.y, 2, 0.5); } else o.vz = 0; } }
         if (o.z <= 0 && o.vz === 0 && !f.land) { f.land = true; o.pose = null; o.sjRot = 0; o.sq = 0.6; }
         if (o.pose) o.sjRot *= 0.9;
+      }
+      // 사람·고양이: 날아간 건 계속 날고, 남은 건 떨어져 착지
+      for (const f of s.actors) {
+        const a = f.a; a.jit = 0; a.sjRot = (a.sjRot || 0) * 0.9;
+        if (a.z > 0 || a.vz > 0) { a.vz = (a.vz || 0) - 1500 * dt; a.z = Math.max(0, a.z + a.vz * dt); if (a.z <= 0 && a.state !== 'fly' && a.state !== 'flung') { a.vz = 0; if (onScreen(a.x, a.y)) dust(a.x, a.y, 3, 0.7); } }
       }
       // 발동한 쥐: 짠! 승리 포즈
       r.pose = s.t < 0.6 ? { front: 2.6, farFront: 2.3, back: -0.2, farBack: 0.2, head: -0.35, tail: 1.3, tilt: -0.35, bob: 0, sx: 1, sy: 1 } : null;
@@ -5707,6 +5690,10 @@ function sjImpact(s) {
     o.trick = null; o.sleep = 0; o.vx = o.vy = o.vz = 0; o.rushT = 0;
     s.floaters.push({ r: o, h: rand(90, 200), d: Math.hypot(o.x - r.x, o.y - r.y) / 1600, ph: rand(0, 6) });
   }
+  // 화면 안 사람·고양이도 둥실 (터질 때 날아감)
+  for (const h of G.humans) if (inRect(h.x, h.y, vr) && h.appear >= 1 && h.state !== 'dead' && h.state !== 'dying' && h.state !== 'splat') s.actors.push({ a: h, z0: Math.max(0, h.z || 0), h: rand(110, 210) * (h.boss ? 0.5 : 1), d: Math.hypot(h.x - r.x, h.y - r.y) / 1600, ph: rand(0, 6) });
+  const c = G.cat; if (c && inRect(c.x, c.y, vr) && c.state !== 'leave' && c.state !== 'flung') s.actors.push({ a: c, z0: Math.max(0, c.z || 0), h: rand(120, 200), d: Math.hypot(c.x - r.x, c.y - r.y) / 1600, ph: rand(0, 6) });
+  for (const f of s.actors) f.a.vz = 0;
   // 화면에 걸친 벽 (막힌 벽만)
   for (const w of visibleWalls()) {
     if (w.solid) continue;                       // 연구소 바깥벽은 못 부숨
@@ -5750,6 +5737,7 @@ function sjBoom(s) {
 }
 function sjEnd(s) {
   for (const f of s.floaters) { f.r.z = 0; f.r.vz = 0; f.r.pose = null; f.r.sjRot = 0; }
+  for (const f of s.actors) { f.a.sjRot = 0; f.a.jit = 0; }
   s.r.pose = null; s.r.sjRot = 0; s.r.jit = 0;
   stopDash(s.r, 0.3, 0.6);
   G.sj = null;
@@ -8216,14 +8204,14 @@ Object.assign(ULT_ENG, {
 
 // 줴리 필살기용 아재개그 (질문, 답). 답이 나오는 순간 = 갑분싸
 const JW_GAGS = [['쥐가 네 마리 모이면?', '쥐포.'], ['왕이 넘어지면?', '킹콩.'], ['소가 웃으면?', '우하하.'], ['세상에서 제일 가난한 왕은?', '최저임금.'], ['바나나가 웃으면?', '바나나킥.'], ['개가 사람을 가르치면?', '개인지도.']];
-const JW_NICK = ['치즈러버', '하수구왕', '찍찍이', '쥐구멍', '익명', '햄찌팬', '고양이싫어', '톰팬'];
 Object.assign(ULT_ENG, {
   // 줴리 — "제리 감사합니다" 짤(톰과 제리 〈피아노 콘서트〉 엔딩 인사) 패러디. 짤이 실제로 쓰이는 방식 그대로:
   //  ① 어그로 (길게 뜸): "궁극기 충전 중" 게이지가 99%에서 멈춤 → 뚝 떨어짐 → 다시 폭주 999% → 정적
   //  ② 막상 나온 건 아재개그 팻말 한 장 → ③ 갑분싸 (귀뚤귀뚤, 관객 "……")
   //  ④ 야유: "우우~ 나가라!!" 관객이 계란·토마토·슬리퍼를 던짐 (앞줄 턱시도 고양이도 슬리퍼 투척)
   //  ⑤ 그런데 줴리는 계란을 맞으면서도 장미 받은 듯 뻔뻔한 미소로 90도 인사, 좌우 번갈아, 점점 빨라짐(배속 짤) → 인사할 때마다 펑
-  //  ⑥ 마지막 인사 대폭발(투척물까지 날아감) → 채팅 "아 킹받네 / 줴리감사 줴리감사 / 인정이지" → 윙크 + 아이리스 아웃
+  //  ⑥ 마지막 인사 대폭발(투척물까지 날아감) → 관객 "아 열받네!! / …근데 인사는 잘하네 / …인정." → 아이리스 아웃
+  // 관객 반응 = 관객 쥐 머리 위 말풍선 대사 (s.talk). 방송 컨셉이 아니라 채팅창은 안 씀 (사용자)
   // 킹받는 포인트 = 박수 받을 일을 안 했는데(오히려 욕먹는데) 박수를 당연히 받는 척하는 뻔뻔함. 원작 디자인은 베끼지 않음
   // 투척물 이미지 = gen_front_rig.mjs --set jwb (jwb_egg·egg_splat·tomato·tomato_splat·slipper), 없으면 코드 그림
   thankyou: {
@@ -8244,32 +8232,32 @@ Object.assign(ULT_ENG, {
     start(s) {
       const r = s.r;
       s.st = { x: r.x, y: r.y };
-      s.gag = pick(JW_GAGS); s.chat = []; s.popped = new Set(); s.proj = []; s.splats = []; s.stuck = []; s.flags = {}; s.bowN = -1; s.iris = 0; s.gray = 0; s.charge = 0; s.dark = 0;
+      s.gag = pick(JW_GAGS); s.talk = []; s.popped = new Set(); s.proj = []; s.splats = []; s.stuck = []; s.flags = {}; s.bowN = -1; s.iris = 0; s.gray = 0; s.charge = 0; s.dark = 0;
       s.spot = { x: r.x, y: r.y };
       r.face = 1; r.z = 0;
       G.quiet = true;
       const x = s.st.x, y = s.st.y;
-      s.inst = [['jw_harp', -300, -40, 70], ['jw_violin', -220, -60, 42], ['jw_drum', 220, -55, 70], ['jw_tuba', 290, -40, 70], ['jw_cello', 360, -25, 55], ['jw_trumpet', 200, -10, 44], ['jw_stand', -160, -20, 40]]
+      s.inst = [['jw_harp', -210, -40, 60], ['jw_violin', -160, -55, 36], ['jw_drum', 150, -50, 58], ['jw_tuba', 200, -38, 58], ['jw_cello', 250, -25, 46], ['jw_trumpet', 135, -12, 38], ['jw_stand', -115, -20, 34]]
         .map(([id, dx, dy, w]) => ({ id, x: x + dx, y: y + dy, w, pop: 0, t0: rand(0.1, 0.5) }));
       const dirY = isOpen(...roomOf(s.st.x, s.st.y + 220)) ? 1 : -1;
       s.dirY = dirY;
       s.crowd = G.rats.filter(o => o !== r && !o.ultOn && onScreen(o.x, o.y, -20)).slice(0, 24);
-      s.crowd.forEach((o, i) => { grabRat(s, o); const row = Math.floor(i / 8), col = i % 8; o.sx0 = o.x; o.sy0 = o.y; o.seatX = s.st.x + (col - 3.5) * 62 + rand(-10, 10) + (row % 2) * 28; o.seatY = s.st.y + dirY * (150 + row * 55); o.throwT = rand(6.75, 7.6); const t = { x: o.seatX, y: o.seatY, vx: 0, vy: 0 }; confine(t, ratR(o) + 6, s.st.x, s.st.y, 0, null); o.seatX = t.x; o.seatY = t.y; });
+      s.crowd.forEach((o, i) => { grabRat(s, o); const row = Math.floor(i / 8), col = i % 8; o.sx0 = o.x; o.sy0 = o.y; o.seatX = s.st.x + (col - 3.5) * 50 + rand(-8, 8) + (row % 2) * 22; o.seatY = s.st.y + dirY * (105 + row * 38); o.throwT = rand(6.75, 7.6); const t = { x: o.seatX, y: o.seatY, vx: 0, vy: 0 }; confine(t, ratR(o) + 6, s.st.x, s.st.y, 0, null); o.seatX = t.x; o.seatY = t.y; });
       // 앞줄 턱시도 고양이 (= 어그로에 낚인 관객)
-      const ct = { x: s.st.x + 170, y: s.st.y + dirY * 110, vx: 0, vy: 0 }; confine(ct, 40, s.st.x, s.st.y, 0, null);
+      const ct = { x: s.st.x + 115, y: s.st.y + dirY * 70, vx: 0, vy: 0 }; confine(ct, 40, s.st.x, s.st.y, 0, null);
       s.cat = { x: G.cam.x + viewW() / 2 + 120, y: ct.y, tx: ct.x, z: 0, face: -1, walk: 0, mode: 'walk', alpha: 1 };
     },
     step(s, dt) {
       const r = s.r, t = s.t, c = s.cat, F = s.flags, ease = ease01;
       const T_Q = 4.6, T_A = 5.5, T_BOO = 6.7, T_BOW = 7.1, T_END = 10.35;
       r.vx = r.vy = 0; r.z = 0; r.x = s.st.x; r.y = s.st.y;
-      s.zoom = t < 10.9 ? 1 + 0.3 * Math.min(1, t / 0.6) : 1 + 0.3 * Math.max(0, 1 - (t - 10.9) / 0.4);
+      s.zoom = t < 10.9 ? 1 + 0.75 * Math.min(1, t / 0.6) : 1 + 0.75 * Math.max(0, 1 - (t - 10.9) / 0.4);   // 평소 크기 줴리를 카메라로 크게 (몸을 키우지 않음)
       for (const I of s.inst) I.pop = Math.max(0, I.pop - dt * 4);
       s.dark = t < 11.2 ? Math.min(0.55, t * 1.1) : Math.max(0, s.dark - dt * 2);
       s.gray = t > T_A + 0.05 && t < T_BOO ? Math.min(1, (t - T_A) / 0.25) : Math.max(0, s.gray - dt * 5);
       s.iris = t > 10.8 ? Math.min(1, (t - 10.8) / 0.6) : 0;
       s.charge = jwGauge(t) / 100;
-      const say = (k, list) => { if (!F[k]) { F[k] = true; for (const [d, txt] of list) s.chat.push({ who: pick(JW_NICK), txt, t0: t + d }); } };
+      const say = (k, list) => { if (!F[k]) { F[k] = true; for (const [d, txt] of list) s.talk.push({ o: jwSpeaker(s), txt, t0: t + d, dur: 1.1 }); } };   // 관객 쥐 하나가 말풍선으로 말함
       const booing = t > T_BOO && t < T_END;
       // ── 관객 쥐 ──
       for (const o of s.crowd) {
@@ -8282,7 +8270,7 @@ Object.assign(ULT_ENG, {
           // 야유 + 투척: 던지는 순간 팔 휘두르기
           const sw = clamp((t - (o.throwT - 0.25)) / 0.25, 0, 1);
           o.z = 0; o.pose = { tilt: -0.45, front: sw < 1 ? 2.9 - sw * 0.4 : 1.4, farFront: 0.6, back: -0.3, farBack: 0.3, head: -0.2, tail: 1.4, bob: Math.sin(t * 10 + o.x) * 2 };
-          if (t > o.throwT) { o.throwT = t + rand(0.7, 1.5); jwThrow(s, o.x, o.y, 30, pick(['egg', 'egg', 'egg', 'tomato', 'tomato', 'slipper'])); if (Math.random() < 0.3) popup(o.x, o.y, pick(['우우~', '나가라!!', '우우우', '내려와!!']), '#e8786a', 16, 0.8, 50); }
+          if (t > o.throwT) { o.throwT = t + rand(0.7, 1.5); jwThrow(s, o.x, o.y, 30, pick(['egg', 'egg', 'egg', 'egg', 'tomato', 'slipper'])); if (Math.random() < 0.3) popup(o.x, o.y, pick(['우우~', '나가라!!', '우우우', '내려와!!']), '#e8786a', 16, 0.8, 50); }
         } else { o.z = 0; o.pose = { head: 0.2, tail: -0.2 }; }
         if (t > T_A + 0.2 && t < T_BOO && !o.dots && Math.random() < dt * 1.5) { o.dots = true; popup(o.x, o.y, '……', '#c8c3d0', 18, 0.9, 50); }
       }
@@ -8301,32 +8289,32 @@ Object.assign(ULT_ENG, {
         // ① 어그로: 기 모으기. 99% 에서 멈추면 떨림도 멈칫, 다시 모을 땐 더 크게
         const stall = t > 2.2 && t < 3.3, hot = t > 3.3;
         r.jit = stall ? 0.6 : 1 + s.charge * (hot ? 5 : 3);
-        r.pose = { tilt: -0.25, front: 2.3 + Math.sin(t * 30) * 0.2, farFront: 2.1, back: -0.5, farBack: 0.5, head: -0.25, tail: 1.3, sy: 1 - Math.min(1, s.charge) * 0.1 };
+        r.pose = { tux: 1, tilt: -0.25, front: 2.3 + Math.sin(t * 30) * 0.2, farFront: 2.1, back: -0.5, farBack: 0.5, head: -0.25, tail: 1.3, sy: 1 - Math.min(1, s.charge) * 0.1 };
         const rate = stall ? 3 : hot ? 30 : 16;
         if (Math.floor(t * rate) !== F.drum) { F.drum = Math.floor(t * rate); Sfx.note(stall ? 90 : 90 + t * 30, 0.06, stall ? 0.03 : 0.06, 0, 'square'); }
         if (!stall && Math.random() < dt * (hot ? 45 : 20)) burst(r.x + rand(-70, 70), r.y + rand(-20, 20), 1, { colors: hot ? ['#e8786a', '#f2c14e', '#fff'] : ['#f2c14e', '#fff3bf'], type: 'star', min: 20, max: hot ? 140 : 60, s0: 2, s1: hot ? 6 : 4, z: rand(10, 90) });
         if (hot) addShake(0.03); else if (t > 1.2 && !stall) addShake(0.015);
         if (!F.drop && t > 3.0) { F.drop = true; Sfx.deny(); }
-        say('c1', [[0.3, '오 뭐임?'], [0.8, '궁극기 뜬다!!'], [1.3, '두근두근'], [1.8, '전설 등급이래']]);
-        if (t > 2.3) say('c1b', [[0, '??'], [0.35, '왜 안 올라감'], [0.7, '렉 걸림?'], [0.8, '어 떨어짐 ㅋㅋ']]);
-        if (t > 3.35) say('c1c', [[0, '온다 온다'], [0.3, '레전드각!!'], [0.6, '999% 실화냐'], [0.8, '숨 참음']]);
+        say('c1', [[0.3, '오, 뭐 한대?'], [0.8, '궁극기래!!'], [1.3, '두근두근…'], [1.8, '전설 등급이래!']]);
+        if (t > 2.3) say('c1b', [[0, '…어?'], [0.35, '왜 멈췄어?'], [0.6, '고장 났나?'], [0.8, '어, 떨어진다!']]);
+        if (t > 3.35) say('c1c', [[0, '온다 온다!!'], [0.3, '이번엔 진짜다!'], [0.55, '999%?!'], [0.8, '(꿀꺽)']]);
       } else if (t < T_Q) {
         // 폭발 직전 정적 (0.4초)
-        r.jit = 0; r.pose = { tilt: -0.35, front: 2.9, farFront: 2.7, back: -0.2, farBack: 0.2, head: -0.35, tail: 1.5, sy: 0.88 };
+        r.jit = 0; r.pose = { tux: 1, tilt: -0.35, front: 2.9, farFront: 2.7, back: -0.2, farBack: 0.2, head: -0.35, tail: 1.5, sy: 0.88 };
         if (!F.hush) { F.hush = true; flash('#fff', 0.15); }
       } else if (t < T_A) {
         // ② 팻말 번쩍: 아재개그 질문
-        r.jit = 0; r.pose = { tilt: -0.35, front: 2.8, farFront: 0.3, back: -0.2, farBack: 0.2, head: -0.3, tail: 1.1 };
+        r.jit = 0; r.pose = { tux: 1, tilt: -0.35, front: 2.8, farFront: 0.3, back: -0.2, farBack: 0.2, head: -0.3, tail: 1.1 };
         if (!F.reveal) { F.reveal = true; flash('#fff', 0.25); Sfx.boom(0.5); }
       } else if (t < T_BOW) {
         // ③ 답 → 갑분싸 → 야유. 줴리는 박수 받을 준비 (뻔뻔한 미소로 꼿꼿이)
         r.jit = 0;
-        r.pose = { jw: 1, h: 66, bend: 0, head: 'smug', near: 'arm', far: 'arm', nearRot: 0, farRot: 0, tail: 0, bob: 0, sprite: null };
+        r.pose = jwBowPose(0, t);
         if (!F.ans) { F.ans = true; Sfx.pop(); }
         for (const k of [5.8, 6.15, 6.45]) if (!F['cr' + k] && t > k) { F['cr' + k] = true; for (let i = 0; i < 3; i++) Sfx.note(4400, 0.04, 0.03, i * 0.06, 'sine'); popup(s.st.x + rand(-250, 250), s.st.y + rand(-60, 60), '귀뚤', '#c8c3d0', 14, 0.7, 30); }
-        say('c2', [[0.1, '……'], [0.3, '?'], [0.5, '이게 궁극기?'], [0.8, 'ㅡㅡ'], [1.0, '갑분싸 ㄷㄷ']]);
+        say('c2', [[0.15, '…….'], [0.45, '…어?'], [0.7, '이게 궁극기야?'], [1.0, '……']]);
         if (t > T_BOO && !F.boo) { F.boo = true; jwBoo(); addShake(0.15); }
-        if (t > T_BOO) say('c3', [[0, '우우우~'], [0.15, '나가라!!'], [0.3, '계란 던져']]);
+        if (t > T_BOO) say('c3', [[0, '우우우~!'], [0.15, '나가라!!'], [0.3, '계란 던져!!']]);
       } else {
         // ④⑤ 계란 맞으면서 좌우 번갈아 90도 인사, 점점 빨라짐 → ⑥ 마지막 초고속 인사 대폭발
         const B = [0.66, 0.55, 0.46, 0.38, 0.32, 0.27, 0.23, 0.2, 0.18];
@@ -8343,8 +8331,8 @@ Object.assign(ULT_ENG, {
           shock(r.x, r.y, ULT_R * 0.95, ultD(s) * 0.4, r, '#f2c14e', 2.4); flash('#fff3bf', 0.45); addShake(0.4); Sfx.boom(1.6); jwClap(1.2); jwBand(s, 0); G.hitstop = 0.08;
           for (const p of s.proj) p.blown = true; for (const sp of s.splats) sp.blown = 0.01; s.stuck = [];   // 던진 것들도 싹 날아감
         }
-        r.pose = { jw: 1, h: 66, bend, head: t > 10.8 ? 'wink' : 'smug', near: 'arm', far: 'arm', nearRot: 0, farRot: 0, tail: Math.sin(t * 3) * 0.1, bob: 0, sprite: null };
-        say('c4', [[0.3, '아니 인사를 왜 해 ㅋㅋ'], [0.7, '계란 맞으면서 감사합니다 ㅋㅋ'], [1.1, '아 킹받네 ㅋㅋㅋ'], [1.5, '줴리감사 줴리감사'], [1.9, '뻔뻔한 거 봐'], [2.3, '개킹받음'], [2.7, 'ㅋㅋㅋㅋㅋㅋㅋ'], [3.3, '…인정이지'], [3.6, '줴리감사 줴리감사']]);
+        r.pose = jwBowPose(bend, t);
+        say('c4', [[0.3, '아니 인사를 왜 해!'], [0.8, '계란 맞으면서 감사하대…'], [1.3, '뻔뻔한 것 좀 봐!!'], [1.8, '아 열받네!!'], [2.4, '…근데 인사는 잘하네'], [3.0, '줴리감사! 줴리감사!'], [3.4, '…인정.']]);
       }
       s.spot.x += (r.x - s.spot.x) * Math.min(1, dt * 4); s.spot.y += (r.y - s.spot.y) * Math.min(1, dt * 4);
       // 투척물 비행 → 줴리 몸에 철퍼덕(붙음) 또는 무대 바닥에 철퍼덕
@@ -8353,15 +8341,19 @@ Object.assign(ULT_ENG, {
         p.t += dt; p.rot += p.vr * dt;
         if (p.t >= p.dur && !p.done) {
           p.done = true;
-          if (p.hit && p.kind !== 'slipper') s.stuck.push({ kind: p.kind, ox: rand(-14, 14), oz: rand(6, 34), rot: rand(0, 6.28) });
+          if (p.hit && p.kind !== 'slipper') s.stuck.push({ kind: p.kind, ox: rand(-10, 10), oz: rand(4, 16), rot: rand(0, 6.28) });
           else s.splats.push({ kind: p.kind, x: p.tx, y: p.ty, rot: rand(0, 6.28) });
-          Sfx.hiss(0.09, 0.18, p.kind === 'slipper' ? 900 : 450); if (p.hit && Math.random() < 0.5) popup(p.tx, p.ty, p.kind === 'slipper' ? '딱!' : '퍽!', '#fff', 16, 0.5, 60);
+          Sfx.hiss(0.09, 0.18, p.kind === 'slipper' ? 900 : 450); if (p.hit) popup(p.tx, p.ty, p.kind === 'slipper' ? '딱!' : '퍽!', '#fff', 18, 0.5, 50);
+          if (p.kind === 'egg') burst(p.tx, p.ty, 5, { colors: ['#f2c14e', '#fffaf0', '#fffaf0'], min: 50, max: 130, s0: 2, s1: 3, z: p.hit ? 24 : 4 });   // 노른자·흰자 튐
+          else if (p.kind === 'tomato') burst(p.tx, p.ty, 6, { colors: ['#d9483b', '#b8322a'], min: 60, max: 160, s0: 2, s1: 4, z: p.hit ? 30 : 4 });
         }
       }
       s.proj = s.proj.filter(p => !p.done && (!p.blown || p.fade > 0));
       for (const sp of s.splats) if (sp.blown) sp.blown += dt;
+      for (const m of s.talk) if (!m.on && t >= m.t0) { m.on = true; m.t0 = t; }
+      s.talk = s.talk.filter(m => !m.on || t - m.t0 < m.dur);
       if (s.splats.length > 60) s.splats.splice(0, s.splats.length - 60);
-      if (s.stuck.length > 10) s.stuck.splice(0, s.stuck.length - 10);
+      if (s.stuck.length > 4) s.stuck.splice(0, s.stuck.length - 4);   // 몸에 묻은 건 몇 개만 (줴리가 가려지지 않게)
     },
     end(s) { G.quiet = false; s.r.hideBody = false; s.r.z = 0; s.r.sjRot = 0; s.r.jit = 0; for (const o of s.crowd || []) { o.z = 0; o.dots = false; } },
     draw(s) {
@@ -8382,15 +8374,27 @@ Object.assign(ULT_ENG, {
       // 바닥에 철퍼덕한 계란·토마토 (마지막 인사 폭발에 날아감)
       for (const sp of s.splats) {
         const k = sp.blown ? Math.max(0, 1 - sp.blown * 3) : 1; if (k <= 0) continue;
-        ctx.save(); ctx.globalAlpha = k; ctx.translate(sp.x, sp.y * TILT); ctx.scale(1, 0.55); ctx.rotate(sp.rot); jwDrawThrown(sp.kind, true, 30); ctx.restore();
+        ctx.save(); ctx.globalAlpha = k; ctx.translate(sp.x, sp.y * TILT); ctx.scale(1, 0.55); ctx.rotate(sp.rot); jwDrawThrown(sp.kind, true, 44); ctx.restore();
       }
       if (s.cat.y < r.y) jwDrawCat(s);
       drawRat(r);
-      for (const st of s.stuck) { ctx.save(); ctx.translate(r.x + st.ox, r.y * TILT - st.oz); ctx.rotate(st.rot); jwDrawThrown(st.kind, true, 16); ctx.restore(); }   // 몸에 묻은 계란
+      for (const st of s.stuck) { ctx.save(); ctx.translate(r.x + st.ox, r.y * TILT - st.oz); ctx.rotate(st.rot); jwDrawThrown(st.kind, true, 15); ctx.restore(); }   // 몸에 묻은 계란
       if (s.cat.y >= r.y) jwDrawCat(s);
       for (const p of s.proj) {
         const k = Math.min(1, p.t / p.dur), x = rLerp(p.x, p.tx, k) + (p.bx || 0), y = rLerp(p.y, p.ty, k) + (p.by || 0), z = rLerp(p.z0, p.hit ? 30 : 0, k) + Math.sin(k * Math.PI) * p.arc;
-        ctx.save(); ctx.globalAlpha = p.fade ?? 1; ctx.translate(x, y * TILT - z); ctx.rotate(p.rot); jwDrawThrown(p.kind, false, p.kind === 'slipper' ? 24 : 16); ctx.restore();
+        ctx.save(); ctx.globalAlpha = p.fade ?? 1; ctx.translate(x, y * TILT - z); ctx.rotate(p.rot); jwDrawThrown(p.kind, false, p.kind === 'slipper' ? 32 : 22); ctx.restore();
+      }
+      // 관객 대사 말풍선 (같은 쥐가 겹쳐 말하면 최신 것만)
+      const seen = new Set();
+      for (const mm of [...s.talk].reverse()) {
+        if (!mm.on || seen.has(mm.o)) continue; seen.add(mm.o);
+        const o = mm.o, k = Math.min(1, (t - mm.t0) / 0.1), fade = Math.min(1, (mm.dur - (t - mm.t0)) / 0.2);
+        ctx.save(); ctx.globalAlpha = Math.max(0, fade); ctx.font = "800 13px 'IBM Plex Sans KR', sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const bw = ctx.measureText(mm.txt).width + 16, bh = 22, bx = o.x, by = o.y * TILT - (o.z || 0) - (o === s.cat ? 120 : 52);
+        ctx.translate(bx, by); ctx.scale(k, k);
+        rr(ctx, -bw / 2, -bh / 2, bw, bh, 10); ctx.fillStyle = '#fffaf0'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#3c322d'; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-5, bh / 2 - 1); ctx.lineTo(0, bh / 2 + 7); ctx.lineTo(5, bh / 2 - 1); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#3c322d'; ctx.fillText(mm.txt, 0, 1); ctx.restore();
       }
       const m = ctx.getTransform(), p = m.transformPoint(new DOMPoint(r.x, r.y * TILT - 40));
       s.irisPt = { x: p.x / SF, y: p.y / SF };
@@ -8429,18 +8433,6 @@ Object.assign(ULT_ENG, {
         rr(ctx, -bw / 2, -bh / 2, bw, bh, 8); ctx.fillStyle = '#fffaf0'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#8a5a34'; ctx.stroke();
         ctx.fillStyle = '#3c322d'; ctx.fillText(txt, 0, 2); ctx.restore();
       }
-      // 방송 채팅창 (기대 → 렉? → 폭주 → 싸늘 → 야유 → 킹받음 → 인정)
-      const vis = s.chat.filter(m => t >= m.t0).slice(-8);
-      if (vis.length && t < 11.1) {
-        const cw2 = 260, cx = W - cw2 - 30, cy = 215, lh = 30;
-        ctx.globalAlpha = 0.9; rr(ctx, cx - 10, cy - 30, cw2 + 20, 8 * lh + 44, 12); ctx.fillStyle = 'rgba(20,14,28,.78)'; ctx.fill();
-        ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.font = "700 13px 'IBM Plex Sans KR', sans-serif"; ctx.fillStyle = '#cdb4db'; ctx.fillText('💬 실시간 채팅', cx, cy - 12);
-        vis.forEach((m, i) => {
-          const y = cy + 16 + i * lh, k = Math.min(1, (t - m.t0) / 0.15);
-          ctx.globalAlpha = k; ctx.font = "700 14px 'IBM Plex Sans KR', sans-serif"; ctx.fillStyle = '#f2c14e'; ctx.fillText(m.who, cx, y);
-          const nw = ctx.measureText(m.who).width + 8; ctx.fillStyle = '#fff'; ctx.font = "600 15px 'IBM Plex Sans KR', sans-serif"; ctx.fillText(m.txt, cx + nw, y);
-        });
-      }
       ctx.restore();
       // 아이리스 아웃
       if (s.iris > 0) {
@@ -8453,6 +8445,18 @@ Object.assign(ULT_ENG, {
     },
   },
 });
+// 다음에 말할 관객: 방금 말한 쥐와 떨어진 쥐 (말풍선 안 겹치게)
+function jwSpeaker(s) {
+  const pool = s.crowd.length ? s.crowd : [s.cat], last = s.talk.slice(-2).map(m => m.o);
+  const far = pool.filter(o => last.every(q => Math.abs(q.x - o.x) > 110 || Math.abs(q.y - o.y) > 40));
+  return pick(far.length ? far : pool);
+}
+// 턱시도 입은 평소 줴리가 뒷다리로 서서 인사 (ratrig.js pose.tux). bend 0 = 꼿꼿이, 1.55 = 90도
+//  몸통은 엉덩이를 축으로 세움(tilt −1.3) → 숙이면 0(수평) / 앞다리는 몸 옆에 가지런히 / 뒷다리·머리는 세상 기준으로 보정
+function jwBowPose(bend, t) {
+  const k = clamp(bend / 1.55, 0, 1), tilt = rLerp(-1.3, -0.42, k), hw = rLerp(0.15, -0.95, k);   // 끝까지 눕히면 기어가는 쥐처럼 보여서 몸은 약 60도까지만, 대신 고개를 푹   // hw = 머리가 세상 기준으로 든 각도 (+ = 턱 들고 뻔뻔)
+  return { tux: 1, tilt, front: -1.2, farFront: -1.28, back: tilt, farBack: tilt + 0.1, head: -tilt - hw, tail: 0.35 + Math.sin(t * 3) * 0.1, bob: 0 };
+}
 // 충전 게이지(%) 대본: 쭉 오르다 99%에서 멈춤 → 97%로 뚝 → 다시 폭주해서 999%
 function jwGauge(t) {
   if (t < 1.4) return 87 * ease01(clamp((t - 0.2) / 1.2, 0, 1));
@@ -8465,12 +8469,13 @@ function jwGauge(t) {
 // 관객이 줴리에게 던짐 (hit = 몸에 맞음 → 계란·토마토는 몸에 붙음). 슬리퍼는 맞고 떨어짐
 function jwThrow(s, x, y, z0, kind, aim) {
   const r = s.r, hit = aim || Math.random() < 0.45;
-  s.proj.push({ kind, x, y, z0, tx: hit ? r.x + rand(-16, 16) : r.x + rand(-120, 120), ty: hit ? r.y + rand(-4, 4) : r.y + rand(-30, 40), hit, t: 0, dur: rand(0.5, 0.75), arc: rand(90, 150), rot: rand(0, 6.28), vr: rand(-14, 14) });
+  s.proj.push({ kind, x, y, z0, tx: hit ? r.x + rand(-10, 10) : r.x + rand(-90, 90), ty: hit ? r.y + rand(-4, 4) : r.y + rand(-25, 30), hit, t: 0, dur: rand(0.5, 0.75), arc: rand(90, 150), rot: rand(0, 6.28), vr: rand(-14, 14) });
   Sfx.throw();
 }
 // 계란·토마토·슬리퍼 (그림 없으면 코드 그림). splat = 깨진 모양
 function jwDrawThrown(kind, splat, w) {
-  const id = 'jwb_' + kind + (splat && kind !== 'slipper' ? '_splat' : ''), im = FR_IMG[id];
+  // 깨진 계란 그림은 흰자가 분홍빛(마젠타 번짐)이라 꽃처럼 보여서 코드로 그림 (흰자 + 노른자)
+  const id = 'jwb_' + kind + (splat && kind !== 'slipper' ? '_splat' : ''), im = splat && kind === 'egg' ? null : FR_IMG[id];
   if (im) { const h = w * im.height / im.width; ctx.drawImage(im, -w / 2, -h / 2, w, h); return; }
   if (kind === 'slipper') { ctx.fillStyle = '#8fb8d8'; rr(ctx, -w / 2, -w / 5, w, w / 2.5, w / 5); ctx.fill(); return; }
   const col = kind === 'egg' ? '#fffaf0' : '#d9483b';
