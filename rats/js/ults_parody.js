@@ -45,22 +45,6 @@ function donate(s, who, amt, msg, big) {
   s.alerts.push({ who, amt, msg, big, t: big ? 2.2 : 1.4 }); if (s.alerts.length > 3) s.alerts.shift();
   Sfx.pop(); if (big) { Sfx.clear(); flash('#f2c14e', 0.2); burst(s.r.x, s.r.y, 30, { colors: ['#f2c14e', '#fff3bf', '#cdb4db'], type: 'star', min: 200, max: 600, s0: 3, s1: 8, z: 60 }); }
 }
-// 줴리 필살기 이름 = 쥐 아재개그 퀴즈 (발동할 때마다 랜덤) [문제, 정답]
-const JW_JOKES = [
-  ['쥐가 네 마리 모이면?', '쥐포!'],
-  ['세상에서 제일 무거운 쥐는?', '돼쥐!'],
-  ['쥐가 공부를 열심히 하면?', '쥐식인!'],
-  ['쥐가 사진 찍는 소리는?', '찍찍!'],
-  ['쥐가 하늘을 날면?', '박쥐!'],
-  ['쥐가 제일 좋아하는 차는?', '쥐프!'],
-  ['쥐가 화나면?', '킹받쥐!'],
-  ['쥐가 달리기를 하면?', '달리쥐… 아니 다람쥐!'],
-  ['쥐가 보는 영화는?', '쥐라기 공원!'],
-  ['쥐가 쓰는 SNS는?', '쥐스타그램!'],
-  ['쥐가 선물을 주면서 하는 말은?', '쥐여줄게!'],
-  ['쥐가 가장 좋아하는 계절은?', '쥐울(겨울)!'],
-];
-const JW_COLD = ['(정적)', '(……)', '(귀뚤귀뚤)', '(관객 한 명 퇴장)', '(에어컨 틀었어요?)', '(싸늘)'];
 // 줴리가 인사하면 그쪽(side −1 왼쪽 / 1 오른쪽 / 0 전부) 악기들이 통 튀며 ♪
 function jwBand(s, side) {
   for (const I of s.inst) if (!side || Math.sign(I.x - s.r.x) === side) {
@@ -80,127 +64,6 @@ function jwPop(s, n, big = 1) {
   Sfx.pop(); if (n > 2) Sfx.boom(0.6);
 }
 Object.assign(ULT_ENG, {
-  // 줴리 (제리 인사 밈 패러디 — 원래 용법: 썰렁한 아재개그 뒤에 뻔뻔하게 "감사합니다"): 필살기 이름 = 쥐 퀴즈 중 랜덤(JW_JOKES, 컷인 제목)
-  // ❓ 문제 → 💡 정답 → 🥶 썰렁한 반응(정적·귀뚤귀뚤·찬바람) → 그 앞에서 90도 인사 "감사합니다~" → 굽실굽실 좌우 번갈아 빨라지며 물건 펑
-  // → 마지막 초 깊은 인사에 반경 안 전부 폭발 → 일어나 윙크 (턱시도 리그 jwrig.js, 무대 양옆 악기)
-  thankyou: {
-    dur: 7.7,
-    pre(s) { s.joke = pick(JW_JOKES); s.cold = pick(JW_COLD); s.title = '❓ ' + s.joke[0]; },   // 컷인 전에 퀴즈를 고름 (ults.js startUlt)
-    beats: [
-      [0.05, s => ucap(s, '❓ ' + s.joke[0], { size: 50, col: '#fff3bf', y: 0.45, dur: 1.15 })],
-      [1.15, s => ucap(s, '💡 ' + s.joke[1], { size: 64, col: '#f2c14e', y: 0.45, dur: 0.75 })],
-      [1.9, s => ucap(s, s.cold, { col: '#bfe8ff' })],
-      [3.1, s => ucap(s, '감사합니다!!', { col: '#fff3bf' })],
-      [4.4, s => ucap(s, '감사합니다!! 감사합니다!!', { col: '#fff3bf' })],
-      [5.9, s => ucap(s, '감사합니다!!', { size: 72, col: '#f2c14e', y: 0.45, dur: 1.2 })],
-      [6.9, s => ucap(s, '(뻔뻔)', { size: 26, col: '#fff3bf' })],
-    ],
-    start(s) {
-      if (!s.joke) ULT_ENG.thankyou.pre(s);
-      s.dark = 0; s.chill = 0; s.popped = new Set(); s.roses = []; s.snow = []; s.bp = 0; s.bowN = 0; s.hit1 = s.hitF = s.said = s.enjoy = false; s.face = -1; s.r.face = -1;
-      // 무대 양옆 악기 (쥐보다 살짝 뒤): [파츠 id, x 오프셋, y 오프셋, 폭]. 인사할 때마다 통 튀며 ♪
-      const x = s.r.x, y = s.r.y;
-      s.inst = [['jw_piano', -175, -30, 150], ['jw_harp', -270, -10, 70], ['jw_violin', -95, -40, 42], ['jw_drum', 120, -35, 70], ['jw_tuba', 185, -20, 70], ['jw_cello', 255, -5, 55], ['jw_trumpet', 95, 20, 44], ['jw_stand', -60, 25, 40]]
-        .map(([id, dx, dy, w]) => ({ id, x: x + dx, y: y + dy, w, pop: 0, t0: rand(0, 0.35) }));
-    },
-    step(s, dt) {
-      const r = s.r, t = s.t, H = 30, T0 = 2.5;               // 2등신이라 키는 작게. T0 = 퀴즈 끝 → 인사 시작
-      r.face = s.face; r.vx = r.vy = 0;
-      for (const I of s.inst) I.pop = Math.max(0, I.pop - dt * 4);
-      s.dark = t < 7.2 ? Math.min(0.55, t * 1.4) : Math.max(0, s.dark - dt * 1.5);
-      s.chill = t > 1.85 && t < T0 + 0.4 ? Math.min(1, s.chill + dt * 4) : Math.max(0, s.chill - dt * 2);
-      const ease = x => x * x * (3 - 2 * x);
-      let bend = 0, head = 'grin', near = 'arm', far = null, nearRot = 0, farRot = 0, tail = Math.sin(t * 3) * 0.1, bob = 0;
-      const tb = t - T0 + 0.6;                                  // 인사 구간 시계 (예전 타임라인 기준)
-      if (t < 1.15) {
-        // ❓ 문제: 관객에게 손을 뻗으며 "맞혀 보세요~"
-        const k = ease(clamp(t / 0.3, 0, 1)); near = 'out'; nearRot = -0.3 * k + Math.sin(t * 6) * 0.05; far = 'arm'; bend = -0.06 * k; head = 'grin';
-        if (onScreen(r.x, r.y) && Math.random() < dt * 3) popup(r.x + rand(-60, 60), r.y, '?', '#fff3bf', 26, 0.7, 70);
-      } else if (t < 1.85) {
-        // 💡 정답: 윙크 + 손 흔들며 의기양양 (빠밤!)
-        head = 'wink'; near = 'wave'; nearRot = Math.sin(t * 16) * 0.25; far = 'out'; farRot = -0.2; bob = -Math.abs(Math.sin(t * 12)) * 1.5;
-        if (!s.said) { s.said = true; r.say = { text: '감사합니다!!', t: 0.8 }; jwBand(s, 0); if (onScreen(r.x, r.y)) burst(r.x, r.y, 14, { colors: ['#f2c14e', '#e8786a', '#cdb4db', '#9dd5a8'], type: 'star', min: 120, max: 300, s0: 3, s1: 6, z: 50 }); Sfx.comboWord(); }
-      } else if (t < T0) {
-        // 🥶 썰렁한 반응을 즐기는 줴리 (킹받게): 눈 감은 뻔뻔한 미소로 가슴 펴고 뒤로 젖힘, 배에 손 얹고 흡족하게 들썩. 객석은 정적·귀뚤귀뚤·우우~
-        const c2 = t - 1.85;
-        head = 'smug'; near = 'belly'; far = 'out'; farRot = -0.35 + Math.sin(t * 5) * 0.08; bend = -0.16 - Math.sin(t * 7) * 0.04; bob = -Math.abs(Math.sin(t * 7)) * 0.8; tail = 0.3 + Math.sin(t * 9) * 0.2;
-        if (!s.enjoy) { s.enjoy = true; r.say = { text: '감사합니다!!', t: 0.9 }; }
-        if (onScreen(r.x, r.y)) {
-          if (Math.random() < dt * 5) popup(r.x + rand(-380, 380), r.y + rand(80, 240), pick(['귀뚤…', '귀뚤귀뚤', '휭~', '…', '우우~', '(싸늘)']), '#bfe8ff', 18, 0.9, 20);
-          if (Math.random() < dt * 4) popup(r.x + rand(-16, 16), r.y, '😏', '#fff3bf', 18, 0.6, 72 + c2 * 10);
-        }
-      } else if (tb < 1.6) {
-        // 첫 인사: 천천히 90도 → 잠깐 멈춤 → 일어남
-        const a = tb - 0.6; bend = a < 0.35 ? 1.45 * ease(a / 0.35) : a < 0.75 ? 1.45 : 1.45 * (1 - ease((a - 0.75) / 0.25));
-        head = 'smug'; near = 'belly'; far = 'out'; farRot = 0.6 * Math.min(1, bend / 1.45);
-        if (!s.hit1 && a > 0.35) { s.hit1 = true; jwPop(s, 1); jwBand(s, -1); r.say = { text: '감사합니다!!', t: 1 }; }
-      } else if (tb < 3.8) {
-        // 굽실굽실: 인사 주기가 0.55초 → 0.13초로 빨라짐. 왼쪽·오른쪽 번갈아(허리를 편 순간 돌아섬), 숙일 때마다 물건 펑 (개수도 늘어남)
-        const u = (tb - 1.6) / 2.2, per = rLerp(0.55, 0.13, u);
-        s.bp += dt / per; const ph = s.bp % 1, n = Math.floor(s.bp);
-        s.face = n % 2 ? 1 : -1;
-        bend = 1.35 * Math.pow(Math.sin(ph * Math.PI), 0.7); head = 'smug'; near = 'belly'; far = 'out'; farRot = 0.55;
-        if (n !== s.bowN && ph > 0.5) { s.bowN = n; jwPop(s, 1 + Math.floor(u * 3)); jwBand(s, s.face); if (Math.random() < 0.3) r.say = { text: '감사합니다!!', t: 0.5 }; }
-        // 박수·장미 (썰렁했는데 왜인지 쏟아짐)
-        if (Math.random() < dt * (4 + u * 10)) s.roses.push({ x: r.x + rand(-500, 500), y: r.y + rand(200, 320), z: 0, tx: r.x + rand(-60, 60), ty: r.y + rand(-15, 30), t: 0, dur: rand(0.6, 0.9), rot: rand(0, 6.28), vr: rand(-12, 12) });
-        if (Math.random() < dt * 6) popup(r.x + rand(-420, 420), r.y + rand(120, 260), '👏', '#fff', 22, 0.6, 20);
-      } else if (tb < 4.6) {
-        // 마지막: 벌떡 → 초 깊은 인사 (머리가 무릎까지) → 반경 안 물건 전부 폭발
-        const a = tb - 3.8; s.face = -1; bend = a < 0.15 ? -0.1 : a < 0.45 ? 1.85 * ease((a - 0.15) / 0.3) : 1.85;
-        head = a < 0.15 ? 'grin' : 'smug'; near = 'belly'; far = 'out'; farRot = 0.9;
-        if (!s.hitF && a > 0.45) {
-          s.hitF = true; jwPop(s, 999, 1.5); jwBand(s, 0);
-          shock(r.x, r.y, ULT_R * 0.7, ultD(s) * 0.6, r, '#f2c14e', 2);
-          blastActorsIn(r.x, r.y, ULT_R * 0.8, 700, ultD(s), r);
-          for (const o of ratsNear(s, r.x, r.y, 360)) { o.frenzy = Math.max(o.frenzy, 2); if (o.z <= 0) o.vz = 320; }
-          flash('#fff3bf', 0.5); addShake(0.7); Sfx.boom(2); G.hitstop = 0.1;
-          for (let i = 0; i < 30; i++) s.roses.push({ x: r.x + rand(-600, 600), y: r.y + rand(150, 320), z: 0, tx: r.x + rand(-160, 160), ty: r.y + rand(-40, 60), t: 0, dur: rand(0.5, 1.1), rot: rand(0, 6.28), vr: rand(-12, 12) });
-        }
-      } else {
-        // 천천히 일어나 윙크 + 손 흔들기 (뻔뻔)
-        const a = tb - 4.6; bend = 1.85 * (1 - ease(clamp(a / 0.6, 0, 1))); head = a > 0.7 ? 'wink' : 'smug'; near = a > 0.7 ? 'wave' : 'belly'; nearRot = a > 0.7 ? Math.sin(t * 14) * 0.25 : 0; far = a > 0.6 ? 'arm' : 'out'; farRot = 0.9 * (1 - clamp(a / 0.6, 0, 1));
-        if (a > 0.8 && !r.say) r.say = { text: '감사합니다!!', t: 1 };
-      }
-      r.pose = { jw: 1, h: H, bend, head, near, far, nearRot, farRot, tail, bob, sprite: null };
-      // 썰렁 구간 눈송이
-      if (s.chill > 0.3 && Math.random() < dt * 30) s.snow.push({ x: r.x + rand(-500, 500), y: r.y + rand(-300, 250), z: rand(200, 400), vx: rand(-60, -20), life: 2 });
-      for (const f of s.snow) { f.z -= 70 * dt; f.x += f.vx * dt; f.life -= dt; } s.snow = s.snow.filter(f => f.life > 0 && f.z > 0);
-      r.jit = 0;
-      for (const ro of s.roses) { ro.t = Math.min(ro.dur, ro.t + dt); ro.rot += ro.vr * dt * (ro.t < ro.dur ? 1 : 0); }
-      if (s.roses.length > 90) s.roses.splice(0, s.roses.length - 90);
-    },
-    draw(s) {
-      const r = s.r;
-      // 무대: 어두운 객석 + 쥐에게 핀 조명
-      if (s.dark > 0) {
-        ctx.save(); ctx.globalAlpha = s.dark; ctx.fillStyle = '#120e1c';
-        ctx.beginPath(); ctx.rect(G.cam.x - 200, G.cam.y - 200, viewW() + 400, viewH() + 400); ctx.ellipse(r.x, r.y * TILT - 10, 150, 70, 0, 0, 6.28); ctx.fill('evenodd'); ctx.restore();
-        ctx.save(); ctx.globalAlpha = s.dark * 0.35; ctx.fillStyle = '#fff3bf';
-        ctx.beginPath(); ctx.moveTo(r.x - 40, G.cam.y - 50); ctx.lineTo(r.x + 40, G.cam.y - 50); ctx.lineTo(r.x + 150, r.y * TILT - 10); ctx.lineTo(r.x - 150, r.y * TILT - 10); ctx.closePath(); ctx.fill(); ctx.restore();
-      }
-      // 무대 양옆 악기 (등장할 때 뿅, 인사할 때마다 통 튐)
-      if (s.dark > 0.05) for (const I of [...s.inst].sort((a, b) => a.y - b.y)) {
-        const im = FR_IMG[I.id]; if (!im) continue;
-        const ap = clamp((s.t - I.t0) / 0.25, 0, 1); if (ap <= 0) continue;
-        const sc = (ap < 1 ? 0.4 + 0.6 * ap + Math.sin(ap * Math.PI) * 0.2 : 1) * (1 + I.pop * 0.18), w = I.w * sc, h = w * im.height / im.width;
-        ctx.save(); ctx.globalAlpha = Math.min(1, s.dark * 2.5); ctx.translate(I.x, I.y * TILT); ctx.scale(1, 1 - I.pop * 0.1); ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
-      }
-      if (s.dark > 0.05) drawRat(r);
-      // 🥶 썰렁: 푸르스름한 찬 기운 + 눈송이
-      if (s.chill > 0) {
-        ctx.save(); ctx.globalAlpha = s.chill * 0.22; ctx.fillStyle = '#9fd0ff'; ctx.fillRect(G.cam.x - 200, G.cam.y - 200, viewW() + 400, viewH() + 400); ctx.restore();
-        ctx.save(); ctx.fillStyle = '#ffffff'; for (const f of s.snow) { ctx.globalAlpha = Math.min(1, f.life) * s.chill; circ(ctx, f.x, f.y * TILT - f.z, 2.5); ctx.fill(); } ctx.restore();
-      }
-      // 날아와 떨어지는 장미
-      const RO = FR_IMG.jw_rose;
-      for (const ro of s.roses) {
-        const k = ro.t / ro.dur, x = rLerp(ro.x, ro.tx, k), y = rLerp(ro.y, ro.ty, k), z = Math.sin(k * Math.PI) * 180;
-        ctx.save(); ctx.translate(x, y * TILT - z); ctx.rotate(ro.rot);
-        if (RO) { const w = 16, h = w * RO.height / RO.width; ctx.drawImage(RO, -w / 2, -h / 2, w, h); } else { ctx.fillStyle = '#e8786a'; circ(ctx, 0, 0, 5); ctx.fill(); }
-        ctx.restore();
-      }
-    },
-  },
   // 람쥐썬더 (평범한 다람쥐 → 밈 각성, 사용자 구성): 옆모습으로 팔 들고 람쥐썬더(앞발 번개) → 점프 → 히어로 랜딩(한 덩어리 자세 몸통)
   // + 양옆 번개 기둥·금 간 바닥·번개 물결·번개 비 → 마지막 초거대 번개 → 연기 펑 하고 원래 모습으로
   ramthunder: {
@@ -683,3 +546,269 @@ Object.assign(ULT_ENG, {
     },
   },
 });
+
+Object.assign(ULT_ENG, {
+  // 줴리 — 톰과 제리 〈피아노 콘서트(The Cat Concerto)〉 패러디: 고생은 고양이가 다 했는데 박수는 줴리가 가로챈다 (제리 인사 밈의 원래 킹받는 포인트)
+  // 막이 열림 → 턱시도 고양이 연주 → 줴리가 피아노에서 튀어나와 방해(뚜껑 쾅·건반 뛰기·의자 빼기) → 고양이 필사의 피날레 → 탈진
+  // → 스포트라이트가 줴리에게 → 90도 인사로 박수 독차지(공연 안내 카드 이름도 바꿔치기) → 인사가 스피드핵처럼 빨라짐 → "읽어주셔서 감사합니다" → 고양이 조용히 퇴장
+  // 무대 소품 = gen_front_rig.mjs --set jwc (시트 한 장) → FR_IMG.jwc_*. 없으면 코드 그림
+  thankyou: {
+    dur: 8.8,
+    pre(s) { s.title = '🎹 피아노 콘서트'; },
+    beats: [
+      [0.05, s => ucap(s, '🎹 오늘의 공연: 헝가리 광시곡 제2번', { size: 32, col: '#fff3bf' })],
+      [1.45, s => ucap(s, '(빼꼼)', { size: 30 })],
+      [1.85, s => ucap(s, '냐아아악!!', { col: '#fff3bf', size: 40 })],
+      [2.35, s => ucap(s, '(삑사리)', { size: 30 })],
+      [2.85, s => ucap(s, '(의자 빼기)', { size: 30 })],
+      [3.25, s => ucap(s, '최후의… 화음!!', { size: 42, col: '#fff3bf' })],
+      [3.95, s => ucap(s, '(탈진)', { size: 30 })],
+      [4.3, s => ucap(s, '……', { size: 40 })],
+      [4.65, s => ucap(s, '감사합니다.', { size: 64, col: '#f2c14e', y: 0.45, dur: 0.9 })],
+      [5.5, s => ucap(s, '감사합니다. 감사합니다.', { col: '#fff3bf' })],
+      [6.3, s => ucap(s, '감사합니다감사합니다감사합니다', { col: '#fff3bf' })],
+      [6.9, s => ucap(s, 'ㄳㄳㄱㄱ갸갸갹ㄱㄳㄳ갹갹', { col: '#fff3bf', size: 40 })],
+      [8.0, s => ucap(s, '(연주자는 조용히 퇴장했다)', { size: 26, col: '#dfefff' })],
+    ],
+    start(s) {
+      const r = s.r;
+      s.st = { x: r.x + 20, y: r.y - 6 };
+      const pim = FR_IMG.jwc_grand, PW = 250, PH = pim ? PW * pim.height / pim.width : 170;
+      s.pw = PW; s.ph = PH; s.px = s.st.x + 30;                                   // 피아노 가운데 x
+      s.kx = s.px - PW / 2 + PW * 0.06;                                                   // 건반(왼쪽 끝) x
+      s.bench = { x: s.kx - 40, y: s.st.y + 4, dx: 0 };
+      s.cat = { x: G.cam.x - 80, y: s.st.y + 6, z: 0, face: 1, walk: 0, mode: 'walk', alpha: 1 };
+      s.spot = { x: s.bench.x, y: s.st.y };
+      s.dark = 0; s.curtain = 0; s.popped = new Set(); s.roses = []; s.sheets = []; s.bp = 0; s.bowN = 0; s.flags = {};
+      r.hideBody = true; r.face = -1;
+      // 무대 양옆 오케스트라 (기존 악기 파츠) — 인사할 때마다 통 튀며 ♪
+      const x = s.st.x, y = s.st.y;
+      s.inst = [['jw_harp', -330, -20, 70], ['jw_violin', -250, -40, 42], ['jw_drum', 250, -35, 70], ['jw_tuba', 320, -20, 70], ['jw_cello', 390, -5, 55], ['jw_trumpet', 230, 20, 44], ['jw_stand', -190, 25, 40]]
+        .map(([id, dx, dy, w]) => ({ id, x: x + dx, y: y + dy, w, pop: 0, t0: rand(0.2, 0.6) }));
+      // 관객: 화면 속 쥐들이 무대 앞 객석으로 (앞이 막혀 있으면 뒤쪽에)
+      const dirY = isOpen(...roomOf(s.st.x, s.st.y + 220)) ? 1 : -1;
+      s.crowd = G.rats.filter(o => o !== r && !o.ultOn && onScreen(o.x, o.y, -20)).slice(0, 24);
+      s.crowd.forEach((o, i) => { grabRat(s, o); const row = Math.floor(i / 8), col = i % 8; o.sx0 = o.x; o.sy0 = o.y; o.seatX = s.st.x + (col - 3.5) * 62 + rand(-10, 10) + (row % 2) * 28; o.seatY = s.st.y + dirY * (150 + row * 55); const t = { x: o.seatX, y: o.seatY, vx: 0, vy: 0 }; confine(t, ratR(o) + 6, s.st.x, s.st.y, 0, null); o.seatX = t.x; o.seatY = t.y; });
+    },
+    step(s, dt) {
+      const r = s.r, t = s.t, c = s.cat, F = s.flags, keyZ = s.ph * 0.45, topZ = s.ph * 0.61, ease = x => x * x * (3 - 2 * x);
+      r.vx = r.vy = 0;
+      for (const I of s.inst) I.pop = Math.max(0, I.pop - dt * 4);
+      s.dark = t < 8.3 ? Math.min(0.6, t * 1.2) : Math.max(0, s.dark - dt * 1.5);
+      s.curtain = t < 8.3 ? Math.min(1, t / 0.8) : Math.max(0, 1 - (t - 8.3) / 0.5);
+      // 관객 입장·반응
+      for (const o of s.crowd) {
+        if (t < 0.9) { const e = ease(t / 0.9); o.x = rLerp(o.sx0, o.seatX, e); o.y = rLerp(o.sy0, o.seatY, e); o.speed = 280; o.walk += dt * 30; o.face = s.st.x > o.x ? 1 : -1; o.pose = null; continue; }
+        o.speed = 0; o.face = s.st.x > o.x ? 1 : -1;
+        if (t > 4.5 && t < 8.3) { o.z = Math.abs(Math.sin(t * 7 + o.x * 0.01)) * 30; o.pose = { tilt: -0.55, front: 2.6, farFront: 2.4, back: -0.3, farBack: 0.3, head: -0.3, tail: 1.2 }; }     // 기립박수
+        else { o.z = 0; o.pose = { head: Math.sin(t * 2 + o.x) * 0.1, tail: 0.3 }; }
+      }
+      // ── 고양이 ──
+      c.jit = 0;
+      if (t < 0.9) { const e = ease(clamp((t - 0.1) / 0.8, 0, 1)); c.x = rLerp(G.cam.x - 60, s.bench.x - 6, e); c.mode = 'walk'; c.walk += dt * 14; c.face = 1; }
+      else if (t < 1.15) { c.mode = 'bow'; if (!F.bow1) { F.bow1 = true; popup(c.x, c.y, '(꾸벅)', '#fff', 16, 0.6, 90); } }
+      else if (t < 3.2) {
+        c.mode = 'play'; c.z = 26; c.speed = rLerp(14, 34, (t - 1.15) / 2);
+        if (t > 1.8 && t < 2.1) { c.mode = 'flinch'; c.jit = 3; }
+        if (t > 2.8 && t < 3.1) { c.mode = 'flung'; c.z = Math.max(0, 26 - (t - 2.8) * 200); }
+        if (t > 2.35) c.jit = Math.max(c.jit, 1.2);
+        if (Math.random() < dt * (4 + (t - 1.15) * 3)) popup(s.kx + rand(0, 60), s.st.y, pick(['♪', '♫', '♬']), '#fff3bf', 20, 0.7, keyZ + 30);
+      } else if (t < 3.9) {
+        // 필사의 피날레: 앞발을 번쩍 → 쾅 ×3
+        const k = (t - 3.2) / 0.7, hit = Math.floor(k * 3);
+        c.mode = (k * 3) % 1 < 0.5 ? 'chordUp' : 'chordDown'; c.z = 26; c.jit = 2;
+        if (hit !== F.chord && (k * 3) % 1 > 0.5) {
+          F.chord = hit; const f = [0.45, 0.6, 0.85][Math.min(2, hit)];
+          shock(s.px, s.st.y, ULT_R * f, ultD(s) * 0.4, r, '#fff3bf', 1.6 + hit * 0.5);
+          jwPop(s, 2 + hit * 2); jwBand(s, 0); addShake(0.15 + hit * 0.1);
+          if (hit === 2) { jwPop(s, 999, 1.5); blastActorsIn(s.px, s.st.y, ULT_R * 0.8, 700, ultD(s), r); flash('#fff3bf', 0.45); Sfx.boom(1.6); G.hitstop = 0.08; }
+        }
+      } else if (t < 8.0) { c.mode = 'dead'; c.z = 26; }
+      else { c.mode = 'exit'; c.face = -1; c.z = 0; c.x -= dt * 150; c.walk += dt * 10; c.alpha = Math.max(0, 1 - (t - 8.0) / 0.8); }
+      // 의자 빼기: 벤치가 스르륵
+      if (t > 2.8 && t < 3.2) s.bench.dx = -60 * ease((t - 2.8) / 0.25); else if (t >= 3.2 && t < 3.3) s.bench.dx = rLerp(-60, 0, (t - 3.2) / 0.1);
+      // 날리는 악보
+      if (t > 1.8 && t < 3.9 && Math.random() < dt * 5) s.sheets.push({ x: s.px + rand(-80, 80), y: s.st.y + rand(-10, 10), z: topZ, vx: rand(-160, 160), vy: rand(-30, 60), vz: rand(120, 260), rot: rand(0, 6.28), vr: rand(-6, 6), life: 2 });
+      for (const p of s.sheets) { p.vz -= 260 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z = Math.max(0, p.z + p.vz * dt); p.rot += p.vr * dt * (p.z > 0 ? 1 : 0); p.life -= dt; }
+      s.sheets = s.sheets.filter(p => p.life > 0);
+      // ── 줴리 ──
+      const onTop = { x: s.px + 10, y: s.st.y + 2, z: topZ };
+      if (t < 1.4) { r.hideBody = true; r.x = onTop.x; r.y = onTop.y; }
+      else if (t < 1.8) {
+        // 빼꼼: 피아노 속에서 쏙
+        if (r.hideBody) { r.hideBody = false; Sfx.pop(); jwPop(s, 1); }
+        r.x = onTop.x; r.y = onTop.y; r.z = topZ * ease(clamp((t - 1.4) / 0.2, 0, 1)) + Math.abs(Math.sin(t * 10)) * 6; r.face = -1; r.pose = { head: -0.3, tail: 1.2, front: 0.4 };
+      } else if (t < 2.3) {
+        // 뚜껑 쾅: 뚜껑 위에서 밀어 닫음
+        r.x = s.px - 30; r.z = topZ + 10; r.face = -1; r.pose = { front: 2.4, farFront: 2.2, tilt: -0.3, head: -0.2, tail: 1.3 };
+        if (!F.lid) { F.lid = true; s.lidT = G.t; popup(s.kx + 20, s.st.y, '쾅!!', '#fff', 26, 0.7, keyZ + 20); jwPop(s, 2); addShake(0.25); Sfx.boom(0.8); }
+      } else if (t < 2.8) {
+        // 건반 위를 콩콩 (삑사리)
+        const k = (t - 2.3) / 0.5; r.x = rLerp(s.kx + 50, s.kx, k); r.z = keyZ + Math.abs(Math.sin(k * Math.PI * 4)) * 26; r.face = -1; r.pose = { front: 0.6, back: -0.6, tail: 1.2, head: -0.2 };
+        if (Math.floor(k * 4) !== F.hop) { F.hop = Math.floor(k * 4); popup(r.x, r.y, pick(['삑!', '뿡!', '♭']), '#fff', 18, 0.5, keyZ + 20); if (F.hop % 2) jwPop(s, 1); }
+      } else if (t < 3.2) {
+        // 의자 빼기
+        r.x = s.bench.x + s.bench.dx - 26; r.z = 0; r.face = 1; r.pose = { tilt: 0.35, front: 1.2, farFront: 1.0, back: -0.6, head: -0.3, tail: 1 };
+        if (!F.bench) { F.bench = true; later(0.2, () => { popup(c.x, c.y, '쿵!', '#fff', 22, 0.6, 30); jwPop(s, 2); addShake(0.15); Sfx.thump(1); }); }
+      } else if (t < 4.5) {
+        // 피날레 동안 피아노 위에서 구경 → 스포트라이트가 옮겨오는 사이 턱시도로 환복
+        r.x = onTop.x; r.y = onTop.y; r.z = topZ; r.face = -1; r.pose = { head: 0.1, tail: 0.6 };
+        if (t > 4.2 && !F.dress) { F.dress = true; smoke(r.x, r.y); smoke(r.x, r.y); Sfx.pop(); }
+      } else {
+        // 박수 가로채기 → 스피드핵 인사
+        r.x = onTop.x; r.y = onTop.y; r.z = topZ; r.face = -1;
+        let bend = 0, head = 'smug', near = 'belly', far = 'out', farRot = 0.6;
+        if (t < 6.2) {
+          // 느릿한 90도 인사 두 번 (팔 가지런히)
+          const ph = ((t - 4.5) / 0.85) % 1; bend = 1.5 * Math.pow(Math.sin(ph * Math.PI), 0.8); near = 'arm'; far = 'arm'; farRot = 0;
+          const n = Math.floor((t - 4.5) / 0.85); if (n !== s.bowN && ph > 0.5) { s.bowN = n; jwPop(s, 2); jwBand(s, 0); }
+        } else if (t < 7.7) {
+          // 스피드핵: 점점 빨라져 잔상처럼 굽실굽실, 숙일 때마다 펑
+          const u = (t - 6.2) / 1.5, per = rLerp(0.4, 0.07, u); s.bp += dt / per; const ph = s.bp % 1, n = Math.floor(s.bp);
+          bend = 1.4 * Math.pow(Math.sin(ph * Math.PI), 0.6); near = 'arm'; far = 'arm'; farRot = 0;
+          if (n !== s.bowN2 && ph > 0.5) { s.bowN2 = n; jwPop(s, 1 + Math.floor(u * 2)); if (n % 2) jwBand(s, n % 4 ? -1 : 1); }
+          if (u > 0.5 && Math.random() < 0.4) particle({ x: r.x, y: r.y, z: topZ + 20, vx: 0, vy: 0, life: 0.12, max: 0.12, size: 18, color: 'rgba(255,243,191,.35)', type: 'trail', drag: 0 });
+        } else {
+          // 서명: 깊숙이 숙인 채 멈춤 → 일어나 윙크
+          const a = t - 7.7; bend = a < 0.6 ? 1.8 : 1.8 * (1 - ease(clamp((a - 0.6) / 0.3, 0, 1))); head = a > 0.8 ? 'wink' : 'smug'; near = a > 0.8 ? 'wave' : 'arm'; far = 'arm';
+        }
+        r.pose = { jw: 1, h: 44, bend, head, near, far, nearRot: near === 'wave' ? Math.sin(t * 14) * 0.25 : 0, farRot, tail: Math.sin(t * 3) * 0.1, bob: 0, sprite: null };
+        // 기립박수: 👏 · 장미
+        if (t < 8.2) {
+          if (Math.random() < dt * 8) popup(s.st.x + rand(-420, 420), s.st.y + rand(120, 280), pick(['👏', '👏👏', '브라보!', '앵콜!!']), '#fff', 20, 0.6, 20);
+          if (Math.random() < dt * 10) s.roses.push({ x: s.st.x + rand(-500, 500), y: s.st.y + rand(200, 320), z: 0, tx: r.x + rand(-50, 50), ty: r.y + rand(-10, 20), t: 0, dur: rand(0.6, 0.9), rot: rand(0, 6.28), vr: rand(-12, 12) });
+        }
+      }
+      // 스포트라이트: 고양이 → (탈진 뒤) 줴리
+      const tgt = t < 3.95 ? { x: c.x, y: s.st.y } : { x: r.x, y: r.y };
+      s.spot.x += (tgt.x - s.spot.x) * Math.min(1, dt * (t < 3.95 ? 8 : 2.2)); s.spot.y += (tgt.y - s.spot.y) * Math.min(1, dt * 3);
+      for (const ro of s.roses) { ro.t = Math.min(ro.dur, ro.t + dt); ro.rot += ro.vr * dt * (ro.t < ro.dur ? 1 : 0); }
+      if (s.roses.length > 90) s.roses.splice(0, s.roses.length - 90);
+    },
+    end(s) { s.r.hideBody = false; s.r.z = 0; for (const o of s.crowd || []) o.z = 0; },
+    draw(s) {
+      const r = s.r, t = s.t;
+      // 어두운 객석 + 핀 조명 (고양이 → 줴리로 이동)
+      if (s.dark > 0) {
+        const sp = s.spot;
+        ctx.save(); ctx.globalAlpha = s.dark; ctx.fillStyle = '#120e1c';
+        ctx.beginPath(); ctx.rect(G.cam.x - 200, G.cam.y - 200, viewW() + 400, viewH() + 400); ctx.ellipse(sp.x, sp.y * TILT, 130, 56, 0, 0, 6.28); ctx.fill('evenodd'); ctx.restore();
+        ctx.save(); ctx.globalAlpha = s.dark * 0.32; ctx.fillStyle = '#fff3bf';
+        ctx.beginPath(); ctx.moveTo(sp.x - 30, G.cam.y - 50); ctx.lineTo(sp.x + 30, G.cam.y - 50); ctx.lineTo(sp.x + 130, sp.y * TILT); ctx.lineTo(sp.x - 130, sp.y * TILT); ctx.closePath(); ctx.fill(); ctx.restore();
+      }
+      // 오케스트라 악기
+      for (const I of [...s.inst].sort((a, b) => a.y - b.y)) {
+        const im = FR_IMG[I.id]; if (!im) continue;
+        const ap = clamp((t - I.t0) / 0.25, 0, 1); if (ap <= 0) continue;
+        const sc = (ap < 1 ? 0.4 + 0.6 * ap : 1) * (1 + I.pop * 0.18), w = I.w * sc, h = w * im.height / im.width;
+        ctx.save(); ctx.globalAlpha = Math.min(1, 0.4 + s.dark); ctx.translate(I.x, I.y * TILT); ctx.scale(1, 1 - I.pop * 0.1); ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
+      }
+      // 피아노 · 벤치 · 고양이 (조명 받는 무대라 어둠 위에 그림)
+      const lidShut = t > 3.9 || (s.lidT && G.t - s.lidT < 0.35);
+      jwDrawPiano(s, lidShut);
+      jwDrawBench(s);
+      jwDrawCat(s);
+      if (!r.hideBody) drawRat(r);
+      // 날리는 악보 · 장미
+      const SH = FR_IMG.jwc_sheet, RO = FR_IMG.jw_rose;
+      for (const p of s.sheets) { ctx.save(); ctx.translate(p.x, p.y * TILT - p.z); ctx.rotate(p.rot); if (SH) { const w = 26, h = w * SH.height / SH.width; ctx.drawImage(SH, -w / 2, -h / 2, w, h); } else { ctx.fillStyle = '#f3ede2'; ctx.fillRect(-10, -13, 20, 26); } ctx.restore(); }
+      for (const ro of s.roses) {
+        const k = ro.t / ro.dur, x = rLerp(ro.x, ro.tx, k), y = rLerp(ro.y, ro.ty, k), z = Math.sin(k * Math.PI) * 180 + (k >= 1 ? s.ph * 0.61 : 0);
+        ctx.save(); ctx.translate(x, y * TILT - z); ctx.rotate(ro.rot);
+        if (RO) { const w = 16, h = w * RO.height / RO.width; ctx.drawImage(RO, -w / 2, -h / 2, w, h); } else { ctx.fillStyle = '#e8786a'; circ(ctx, 0, 0, 5); ctx.fill(); }
+        ctx.restore();
+      }
+    },
+    // 화면: 극장 커튼(양옆·위) + 공연 안내 카드(연주자 이름 바꿔치기) + 마지막 "읽어주셔서 감사합니다"
+    ui(s) {
+      const t = s.t, o = s.curtain;
+      if (o > 0) {
+        const CU = FR_IMG.jwc_curtain, VA = FR_IMG.jwc_valance, cw = 230, open = ease01(Math.min(1, t / 0.8)) * (t < 8.3 ? 1 : o);
+        for (const d of [-1, 1]) {
+          const x = d < 0 ? rLerp(W / 2 - cw, -cw * 0.55, open) : rLerp(W / 2, W - cw * 0.45, open);
+          // 커튼 그림은 오른쪽용(끈이 오른쪽) → 왼쪽은 좌우 반전
+          ctx.save(); ctx.translate(x + (d < 0 ? cw : 0), 0); ctx.scale(d < 0 ? -1 : 1, 1);
+          if (CU) ctx.drawImage(CU, 0, 0, cw, H); else { ctx.fillStyle = '#9d2b35'; ctx.fillRect(0, 0, cw, H); ctx.fillStyle = 'rgba(0,0,0,.15)'; for (let i = 0; i < 6; i++) ctx.fillRect(i * 40 + 10, 0, 12, H); }
+          ctx.restore();
+        }
+        if (VA) ctx.drawImage(VA, -20, -8, W + 40, 90); else { ctx.fillStyle = '#9d2b35'; ctx.fillRect(0, 0, W, 60); ctx.fillStyle = '#e3c46a'; ctx.fillRect(0, 56, W, 8); }
+      }
+      // 공연 안내 카드: 연주자 이름이 바꿔치기됨
+      if (t > 0.3 && t < 8.4) {
+        const CA = FR_IMG.jwc_card, a = Math.min(1, (t - 0.3) / 0.3) * (t > 8.1 ? (8.4 - t) / 0.3 : 1);
+        ctx.save(); ctx.globalAlpha = a; ctx.translate(W - 250, 150);
+        if (CA) ctx.drawImage(CA, -120, -48, 240, 96); else { rr(ctx, -120, -48, 240, 96, 8); ctx.fillStyle = '#f7efdc'; ctx.fill(); ctx.strokeStyle = '#d9a441'; ctx.lineWidth = 3; ctx.stroke(); }
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4b4540';
+        ctx.font = "700 14px 'IBM Plex Sans KR', sans-serif"; ctx.fillText('♪ 오늘의 연주 ♪', 0, -24);
+        ctx.font = "700 18px 'IBM Plex Sans KR', sans-serif"; ctx.fillText('연주: 턱시도 고양이', 8, 4);
+        if (t > 4.9) {
+          const k = Math.min(1, (t - 4.9) / 0.3);
+          ctx.strokeStyle = '#c9504a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-18, 4); ctx.lineTo(-18 + 118 * k, 2); ctx.stroke();
+          if (k >= 1) { ctx.save(); ctx.translate(46, 30); ctx.rotate(-0.12); ctx.fillStyle = '#c9504a'; ctx.font = "700 22px 'IBM Plex Sans KR', sans-serif"; ctx.fillText('→ 줴리', 0, 0); ctx.restore(); }
+        }
+        ctx.restore();
+      }
+      // 글 마무리 서명
+      if (t > 7.7) {
+        const a = Math.min(1, (t - 7.7) / 0.25) * (t > 8.5 ? Math.max(0, (8.8 - t) / 0.3) : 1);
+        ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.62);
+        rr(ctx, -250, -34, 500, 68, 10); ctx.fillStyle = 'rgba(251,247,239,.95)'; ctx.fill(); ctx.strokeStyle = '#d6d1c8'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#4b4540'; ctx.font = "700 26px 'IBM Plex Sans KR', sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('— 읽어주셔서 감사합니다 🙇', 0, 2);
+        ctx.restore();
+      }
+    },
+  },
+});
+const ease01 = x => x * x * (3 - 2 * x);
+// 그랜드 피아노 (건반이 왼쪽). 기준점 = 다리 밑 가운데
+function jwDrawPiano(s, shut) {
+  const im = FR_IMG[shut ? 'jwc_grand_shut' : 'jwc_grand'] || FR_IMG.jwc_grand;
+  ctx.save(); ctx.translate(s.px, s.st.y * TILT);
+  ctx.fillStyle = 'rgba(30,15,5,.28)'; ctx.beginPath(); ctx.ellipse(0, 4, s.pw * 0.52, 22, 0, 0, 6.28); ctx.fill();
+  if (im) { const h = s.pw * im.height / im.width; ctx.drawImage(im, -s.pw / 2, -h, s.pw, h); }
+  else {
+    ctx.fillStyle = '#2b2530'; rr(ctx, -s.pw / 2, -s.ph * 0.62, s.pw, s.ph * 0.2, 16); ctx.fill();
+    for (const x of [-s.pw * 0.4, 0, s.pw * 0.4]) ctx.fillRect(x - 5, -s.ph * 0.44, 10, s.ph * 0.44);
+    ctx.fillStyle = '#f3ede2'; ctx.fillRect(-s.pw / 2, -s.ph * 0.5, 30, 8);
+    if (!shut) { ctx.save(); ctx.translate(-s.pw * 0.3, -s.ph * 0.62); ctx.rotate(-0.5); ctx.fillStyle = '#3c343f'; ctx.fillRect(0, -6, s.pw * 0.75, 6); ctx.restore(); }
+  }
+  ctx.restore();
+}
+function jwDrawBench(s) {
+  const b = s.bench, im = FR_IMG.jwc_bench;
+  ctx.save(); ctx.translate(b.x + b.dx, b.y * TILT);
+  if (im) { const w = 70, h = w * im.height / im.width; ctx.drawImage(im, -w / 2, -h, w, h); } else { ctx.fillStyle = '#2b2530'; ctx.fillRect(-32, -30, 64, 10); ctx.fillRect(-26, -20, 6, 20); ctx.fillRect(20, -20, 6, 20); }
+  ctx.restore();
+}
+// 턱시도 고양이 (고양이 방치 게임 파츠 + 나비넥타이). 자세: walk · bow · play · flinch · flung · chordUp/Down · dead · exit
+function jwDrawCat(s) {
+  const c = s.cat, rig = CAT_RIGS.tuxedo; if (!c || c.alpha <= 0) return;
+  const t = G.t, sp = c.speed || 20;
+  let p = { head: 0, tail: 0.3 + Math.sin(t * 3) * 0.2, front: 0, back: 0, farFront: 0, farBack: 0, bob: 0, tilt: 0 };
+  if (c.mode === 'walk' || c.mode === 'exit') { const w = c.walk, s1 = Math.sin(w); p = { ...p, front: s1 * 0.5, farBack: s1 * 0.45, farFront: -s1 * 0.5, back: -s1 * 0.45, bob: -Math.abs(Math.cos(w)) * 2.5 }; if (c.mode === 'exit') Object.assign(p, { head: 0.55, tail: -0.5 }); }
+  else if (c.mode === 'bow') Object.assign(p, { tilt: 0.35, head: 0.6, front: -0.3, tail: 0.6 });
+  else if (c.mode === 'play') Object.assign(p, { tilt: -0.75, back: 1.1, farBack: 1.1, front: 1.35 + Math.sin(t * sp) * 0.35, farFront: 1.35 - Math.sin(t * sp) * 0.35, head: 0.35, tail: 0.6 + Math.sin(t * 8) * 0.3 });
+  else if (c.mode === 'flinch') Object.assign(p, { tilt: -0.9, back: 1.1, farBack: 1.1, front: 2.6, farFront: 2.4, head: -0.5, tail: 1.4 });
+  else if (c.mode === 'flung') Object.assign(p, { front: Math.sin(t * 30) * 1.4, farFront: Math.cos(t * 27) * 1.4, back: Math.sin(t * 28) * 1.2, farBack: Math.cos(t * 25) * 1.2, tail: Math.sin(t * 20), head: Math.sin(t * 15) * 0.4 });
+  else if (c.mode === 'chordUp') Object.assign(p, { tilt: -0.9, back: 1.1, farBack: 1.1, front: 2.7, farFront: 2.6, head: -0.3, tail: 1.3 });
+  else if (c.mode === 'chordDown') Object.assign(p, { tilt: -0.55, back: 1.1, farBack: 1.1, front: 1.1, farFront: 1.0, head: 0.5, tail: 1.3 });
+  else if (c.mode === 'dead') Object.assign(p, { tilt: 0.6, back: 1.1, farBack: 1.1, front: 0.9, farFront: 0.8, head: 0.9, tail: -0.8 });   // 건반 위에 엎어짐
+  ctx.save(); ctx.globalAlpha = c.alpha;
+  // 조명이 줴리에게 옮겨간 뒤 = 쓰러진 연주자는 어둠 속에 방치
+  const dim = s.t > 4.1 && s.t < 8 ? Math.min(1, (s.t - 4.1) / 0.4) : 0;
+  if (dim > 0) ctx.filter = `brightness(${(1 - 0.65 * dim).toFixed(2)})`;
+  ctx.fillStyle = 'rgba(30,15,5,.2)'; ctx.beginPath(); ctx.ellipse(c.x, c.y * TILT, 40, 12, 0, 0, 6.28); ctx.fill();
+  ctx.translate(c.x + (c.jit ? rand(-c.jit, c.jit) : 0), c.y * TILT - (c.z || 0)); ctx.scale(-c.face, 1);
+  const L = CAT_LEN * 0.9;
+  if (rig) {
+    drawCatRig(rig, L, p);
+    // 나비넥타이 (목 자리)
+    const k = L / rig.len, bt = FR_IMG.jwc_bowtie, nx = rig.neck[0] * k + 4, ny = rig.neck[1] * k + 6;
+    ctx.save(); ctx.translate(rig.hip[0] * k, rig.hip[1] * k); ctx.rotate(-(p.tilt || 0)); ctx.translate(-rig.hip[0] * k, -rig.hip[1] * k); ctx.translate(nx, ny + (p.bob || 0));
+    if (bt) { const w = 22, h = w * bt.height / bt.width; ctx.drawImage(bt, -w / 2, -h / 2, w, h); } else { ctx.fillStyle = '#1d1826'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -6); ctx.lineTo(-10, 6); ctx.closePath(); ctx.moveTo(0, 0); ctx.lineTo(10, -6); ctx.lineTo(10, 6); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  } else { ctx.fillStyle = '#2b2530'; rr(ctx, -40, -46, 80, 36, 16); ctx.fill(); circ(ctx, -40, -54, 18); ctx.fill(); }
+  ctx.restore();
+  // 탈진: 머리 위 별 빙빙
+  if (c.mode === 'dead') { ctx.save(); ctx.fillStyle = '#f2c14e'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; for (let i = 0; i < 3; i++) { const a = t * 6 + i * 2.09; ctx.fillText('★', c.x - 20 + Math.cos(a) * 18, c.y * TILT - c.z - 74 + Math.sin(a) * 6); } ctx.restore(); }
+}

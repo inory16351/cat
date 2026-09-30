@@ -25,6 +25,7 @@ UnityResources/Rats/
   Sheets/group_*.png          쥐 파츠 모음 시트 (한 장에 4종, 5열×4행) → 종별 Sheets/<id>.png 로 재배치
   World/<id>.png              방해꾼·스테이지: cat(걷기)·cat_pounce(덮치기)·mousetrap(장전)·mousetrap_snap(닫힘)·stairs(계단)
   ArtSheets/art_*.png         위 소품들의 Codex 원본 시트 (4열×3행, 한 장에 12개 → 잘라서 씀)
+  Sheets/jwerry_concert.png   줴리 필살기 "피아노 콘서트" 무대 소품 시트 (4×2) → FrontRig/jwc_*.png (그랜드 피아노 열림·닫힘, 벤치, 커튼, 상단 장식, 나비넥타이, 빈 공연 카드, 악보)
   Sheets/front_*.png          필살기 앞모습 리그 시트 (rats/dev/gen_front_rig.mjs, 한 장 5×3). 지금 쓰는 것 = front_rs3.png (람쥐썬더 다람쥐)
   FrontRig/rs_*.png           위 시트에서 자른 앞모습 파츠 원본 (_v1·_v2_cartoon·_v3_painted = 안 쓰게 된 이전 시도)
   Humans/Sheets/sheet_*.png   사람 파츠 원본 시트 (5열×3행, 한 장에 3명)
