@@ -12,6 +12,7 @@ function loadFrontParts() {
   for (const id of Object.keys(FRONT_PARTS)) {
     const im = new Image();
     im.onload = () => { FR_IMG[id] = im; if (FRONT_PARTS[id].kind === 'limb') FR_PTS[id] = limbPoints(im, FRONT_PARTS[id]); };
+    if (id === 'ui_ratface') im.addEventListener('load', () => { for (const e of document.querySelectorAll('.pow-ico')) e.innerHTML = `<img src="${im.src}" alt="">`; });   // HUD 찍찍!! 아이콘 (없으면 🐭)
     im.src = `../assets/rats/front/${id}.png`;
   }
 }

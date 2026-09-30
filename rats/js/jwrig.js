@@ -11,14 +11,15 @@ const JW_RIG = {                                   // 3차(2등신) 파츠 기�
   head: { jw_head_smug: [0.4, 0.97], jw_head_grin: [0.45, 0.97], jw_head_wink: [0.43, 0.97] },
 };
 // 밈처럼 2등신: 머리는 그대로, 몸(몸통·팔·다리)만 줄임 (파츠를 2등신으로 그려도 몸 합계가 머리의 약 1.9배로 나와서)
-const JW_BODY_K = 0.65;
+// 2026-10-01 사용자 "인사할 때 얼굴이 너무 큼, 실제 밈처럼": 머리 폭이 몸통의 2.5배였음 → 머리 0.78배·몸 0.72배 (머리 폭 ≈ 몸통 1.7배, 키의 약 36%)
+const JW_BODY_K = 0.72, JW_HEAD_K = 0.78;
 const jwReady = () => !!(FR_IMG.jw_up && FR_IMG.jw_low && FR_IMG.jw_leg && FR_IMG.jw_head_smug);
 // pose = { jw: 1, h: 키, bend: 인사 각도(라디안, + = 앞으로 숙임), head: 'smug'|'grin'|'wink', headRot,
 //          near: 'arm'|'belly'|'out'|'wave' (가까운 팔), nearRot, far: 'arm'|'out'|null (먼 팔), farRot, tail, bob, sx, sy, rose: 발밑 장미 수 }
 function drawBowRig(pose, g = ctx) {
   const M = FRONT_PARTS, S = id => M[id].size, R = JW_RIG;
   const BK = JW_BODY_K, sz = id => S(id).map(v => v * BK);
-  const [lw, lh] = sz('jw_low'), [uw, uh] = sz('jw_up'), [gw, gh] = sz('jw_leg'), hd = 'jw_head_' + (pose.head || 'smug'), [hw, hh] = S(hd);
+  const [lw, lh] = sz('jw_low'), [uw, uh] = sz('jw_up'), [gw, gh] = sz('jw_leg'), hd = 'jw_head_' + (pose.head || 'smug'), [hw, hh] = S(hd).map(v => v * JW_HEAD_K);
   const legH = gh * (1 - R.leg[1]);
   const unit = (pose.h || 40) / (legH + lh * 0.8 + uh * 0.95 + hh * 0.9);
   const bend = pose.bend || 0, c = Math.cos(-bend), s = Math.sin(-bend);   // 앞(왼쪽)으로 숙이면 반시계 회전
@@ -46,7 +47,7 @@ function drawBowRig(pose, g = ctx) {
   g.drawImage(FR_IMG.jw_low, lx, ly, lw, lh);
   g.save(); g.translate(wx, wy); g.rotate(-bend); g.translate(-wx, -wy); g.drawImage(FR_IMG.jw_up, ux, uy, uw, uh); g.restore();
   const [nx, ny] = UJ('neck');
-  part(hd, [nx, ny + uh * 0.08], R.head[hd] || [0.43, 0.97], -bend * 0.85 + (pose.headRot || 0), false, 1);   // 2등신 큰 머리
+  part(hd, [nx, ny + uh * 0.08], R.head[hd] || [0.43, 0.97], -bend * 0.85 + (pose.headRot || 0), false, JW_HEAD_K);   // 큰 머리 (몸보다 덜 줄임)
   // 손 흔드는 팔은 얼굴을 가리지 않게 조금 길게·바깥(앞쪽 위)으로
   const nw = pose.near === 'wave';
   part(armId(pose.near || 'arm'), UJ('shoulder'), armPiv(pose.near || 'arm'), -bend + (pose.nearRot || 0) + (nw ? -0.75 : 0), false, nw ? BK * 1.35 : BK);

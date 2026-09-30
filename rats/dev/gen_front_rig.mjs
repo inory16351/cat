@@ -180,8 +180,18 @@ const JWC_CELLS = [
   ['jwc_card', 'prop', 'a BLANK cream concert programme card in a thin gold ornamental border, landscape, completely EMPTY inside (no text, no letters, no symbols)'],
   ['jwc_sheet', 'prop', 'a single loose sheet of piano sheet-music paper fluttering slightly curled, with staff lines and simple note heads only (NO letters, NO words)'],
 ];
+// 줴리 필살기 야유 투척물 + HUD 찍찍!! 아이콘 (한 장에 모아 뽑고 자름)
+const JWB_CELLS = [
+  ['ui_ratface', 'prop', 'a small cute ROUND grey-brown RAT FACE icon in FRONT VIEW (just the head: two big round ears with pink insides, two dot eyes, a pink nose, a few short whiskers, cheeky little buck teeth), like a simple app icon, fills the cell'],
+  ['jwb_egg', 'prop', 'one whole plain white-cream chicken EGG, slightly tilted'],
+  ['jwb_egg_splat', 'prop', 'a SPLATTERED broken raw egg seen from above: irregular clear-white splash shape with a round yellow yolk in the middle and two small jagged cracked shell pieces'],
+  ['jwb_tomato', 'prop', 'one whole ripe red TOMATO with a small green stem and leaves, side view'],
+  ['jwb_tomato_splat', 'prop', 'a SQUASHED tomato splat seen from above: irregular red splash shape with a few seeds and a green stem bit'],
+  ['jwb_slipper', 'prop', 'one worn light-blue house SLIPPER (flip-flop style bathroom slipper), side-top view'],
+];
 const SETS = {
-  jwc: { cols: 4, rows: 2, cells: JWC_CELLS, file: 'jwerry_concert', refs: [], extra: [path.join(U, 'FrontRig', 'jw_piano.png'), path.join(U, 'FrontRig', 'jw_rose.png')] },
+  jwb: { cols: 3, rows: 2, cells: JWB_CELLS, file: 'jwerry_boo', refs: [], extra: [path.join(U, 'FrontRig', 'jw_rose.png'), path.join(U, 'FrontRig', 'jw_trumpet.png')] },
+  jwc:{ cols: 4, rows: 2, cells: JWC_CELLS, file: 'jwerry_concert', refs: [], extra: [path.join(U, 'FrontRig', 'jw_piano.png'), path.join(U, 'FrontRig', 'jw_rose.png')] },
   jw: { cols: 5, rows: 3, cells: JW_CELLS, file: 'jwerry_sheet', refs: ['streamrat'] },
   rs6: { cols: 3, rows: 2, cells: RS6_CELLS, file: 'front_rs6', refs: ['ramjui'], extra: [path.join(U, 'Sheets', 'front_rs3.png')] },
   rs5: { cols: 4, rows: 3, cells: RS5_CELLS, file: 'front_rs5', refs: ['ramjui'], extra: [path.join(U, 'Sheets', 'front_rs3.png')] },
@@ -194,7 +204,7 @@ const SETS = {
 const { cols: COLS, rows: ROWS, cells: CELLS, file: SHEET } = SETS[SET];
 const REFS = SETS[SET].refs.flatMap(id => ['head', 'torso', 'front', 'back', 'tail'].map(n => path.join(U, 'Parts', id, n + '.png')));
 const EXTRA = SETS[SET].extra || [];
-const STYLE = SET === 'jwc'
+const STYLE = SET === 'jwc' || SET === 'jwb'
   ? 'ART STYLE = EXACTLY the attached game stage props (the small piano and the rose): flat minimalist illustration in the style of "Untitled Goose Game", simple clean shapes, NO outlines, soft muted palette, flat colors with at most one slightly darker flat shade. These are stage PROPS for a comedy concert scene.'
   : SET === 'jw'
   ?'ART STYLE = EXACTLY the attached game rat parts: flat minimalist illustration in the style of "Untitled Goose Game", simple clean shapes, NO outlines, soft muted palette, flat colors with at most one slightly darker flat shade, the same eye and face style as the reference head. ORIGINAL parody character: do NOT copy any existing cartoon character design.'
@@ -209,11 +219,11 @@ const STYLE = SET === 'jwc'
 const prompt = [
   REFS.length && `STYLE REFERENCE (MANDATORY): the attached images (also on disk: ${REFS.join(', ')}) are existing game parts. Match their exact art style, colours and level of detail (they are side views; you draw the same character from the front).`,
   ['rs4', 'rs5', 'rs6'].includes(SET) && `The attached front_rs3 sheet (${EXTRA.join(', ')}) is the existing FRONT-VIEW part sheet of this squirrel in the SAME game style: FRONT-VIEW cells must match it exactly in style and scale; SIDE-VIEW cells must match the attached side parts.`,
-  SET === 'jwc' && `STYLE REFERENCE (MANDATORY): the attached images (${EXTRA.join(', ')}) are existing props from the same scene — match their art style, colours and level of detail exactly.`,
-  !['rs4', 'rs5', 'rs6', 'jwc'].includes(SET) && EXTRA.length && `POSE / ANATOMY REFERENCE: the attached photo sheet (${EXTRA.join(', ')}) shows how the real squirrel looks and stands — use it for body shape and the animal feel only, not for the rendering style.`,
+  (SET === 'jwc' || SET === 'jwb') && `STYLE REFERENCE (MANDATORY): the attached images (${EXTRA.join(', ')}) are existing props from the same scene — match their art style, colours and level of detail exactly.`,
+  !['rs4', 'rs5', 'rs6', 'jwc', 'jwb'].includes(SET) && EXTRA.length && `POSE / ANATOMY REFERENCE: the attached photo sheet (${EXTRA.join(', ')}) shows how the real squirrel looks and stands — use it for body shape and the animal feel only, not for the rendering style.`,
   STYLE,
   `Asset: ONE game sheet. Canvas: landscape 1536x1024. Background: perfectly flat solid pure MAGENTA #FF00FF everywhere between the drawings (no gradient); never use magenta inside the drawings.`,
-  `Layout: an invisible grid of ${COLS} columns x ${ROWS} rows of equal cells (each ${1536 / COLS | 0}x${1024 / ROWS | 0}). Exactly ONE drawing per cell, centered, with a clear empty margin, never touching other drawings or the cell borders.${SET === 'jwc' ? ' Each prop fills about 80% of its cell.' : SET === 'rsp' ? ' Each squirrel fills most of its cell height, feet at the bottom of the drawing.' : ' These are cut-out PUPPET PARTS for a paper-doll rig: all body parts at the SAME SCALE (the head about as wide as the torso, arms/legs about as long as the torso is tall).'}`,
+  `Layout: an invisible grid of ${COLS} columns x ${ROWS} rows of equal cells (each ${1536 / COLS | 0}x${1024 / ROWS | 0}). Exactly ONE drawing per cell, centered, with a clear empty margin, never touching other drawings or the cell borders.${SET === 'jwc' || SET === 'jwb' ? ' Each prop fills about 80% of its cell.' : SET === 'rsp' ? ' Each squirrel fills most of its cell height, feet at the bottom of the drawing.' : ' These are cut-out PUPPET PARTS for a paper-doll rig: all body parts at the SAME SCALE (the head about as wide as the torso, arms/legs about as long as the torso is tall).'}`,
   ...Array.from({ length: ROWS }, (_, r) => `Row ${r + 1}: ${CELLS.slice(r * COLS, r * COLS + COLS).map((c, k) => `(column ${k + 1}) ${c[2]}`).join(' · ')}.`),
   'ORIGINAL designs only: do not copy any existing movie, comic, game or brand character or logo. No text, no labels, no numbers, no ground shadows, no border, no watermark.',
 ].filter(Boolean).join('\n');

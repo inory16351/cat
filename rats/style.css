@@ -304,3 +304,5 @@ h1 span { color: var(--terra); }
 .ult-pick .ic { font-size: 1.4em; }
 .ult-pick small { opacity: .75; }
 .ult-pick:hover { transform: translateY(-2px); }
+.pow-ico { display: inline-block; width: 1.25em; text-align: center; }
+.pow-ico img { width: 1.35em; height: 1.35em; object-fit: contain; vertical-align: -0.3em; }

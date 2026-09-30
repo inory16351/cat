@@ -34,7 +34,7 @@ const UI = (() => {
     const w = tierWeights(), sum = w.reduce((a, b) => a + b, 0);
     const hi = TIERS.map((t, i) => [t, w[i] / sum]).filter(([, p], i) => i >= 1 && p >= 0.001).map(([t, p]) => `${t.name} ${oddsPct(p)}`).join(' · ');
     $('rampSub').textContent = `탄생 확률 · ${hi}`;
-    // ⚔️ 전투력 게이지: 눈금(75% 지점) = 이 층 적정 찍찍!! → 넘으면 초록
+    // 🐭 전투력 게이지 (찍찍!! 아이콘 = FR_IMG.ui_ratface): 눈금(75% 지점) = 이 층 적정 찍찍!! → 넘으면 초록
     if (G.power !== undefined) {
       const need = powNeed(S.floor), k = G.power / need;
       $('pow').textContent = fmt(G.power);
