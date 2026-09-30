@@ -63,6 +63,7 @@ const Sfx = (() => {
   return {
     // 음 하나 (피아노 연주 흉내 등): f 주파수, dur 길이, vol 크기, delay 지연(초)
     note(f, dur = 0.25, vol = 0.12, delay = 0, type = 'triangle') { tone({ type, f, dur, vol, delay }); },
+    hiss(dur = 0.05, vol = 0.1, freq = 2000, delay = 0) { noise({ dur, vol, freq, q: 1, delay }); },
     resume() { init(); if (ac && ac.state === 'suspended') ac.resume(); },
     toggle() { muted = !muted; return muted; },
     get muted() { return muted; },
