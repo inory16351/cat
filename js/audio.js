@@ -61,6 +61,8 @@ const Sfx = (() => {
   const r = (a, b) => a + Math.random() * (b - a);
 
   return {
+    // 음 하나 (피아노 연주 흉내 등): f 주파수, dur 길이, vol 크기, delay 지연(초)
+    note(f, dur = 0.25, vol = 0.12, delay = 0, type = 'triangle') { tone({ type, f, dur, vol, delay }); },
     resume() { init(); if (ac && ac.state === 'suspended') ac.resume(); },
     toggle() { muted = !muted; return muted; },
     get muted() { return muted; },

@@ -160,8 +160,9 @@ const UI = (() => {
     const vw = host.clientWidth || 800, vh = host.clientHeight || 500;
     if (!mapPan) mapPan = { x: vw / 2 - C * mapZoom, y: vh / 2 - C * mapZoom };
     applyPan(inner);
-    view.onpointerdown = e => { mapDrag = { x: e.clientX, y: e.clientY, px: mapPan.x, py: mapPan.y }; mapMoved = false; view.setPointerCapture(e.pointerId); view.classList.add('drag'); };
-    view.onpointermove = e => { if (!mapDrag) return; const dx = e.clientX - mapDrag.x, dy = e.clientY - mapDrag.y; if (Math.abs(dx) + Math.abs(dy) > 6) mapMoved = true; mapPan.x = mapDrag.px + dx; mapPan.y = mapDrag.py + dy; applyPan(inner); };
+    // 포인터 캡처는 실제로 드래그가 시작될 때만 (누르자마자 캡처하면 클릭이 노드 버튼이 아니라 지도로 가서 노드가 안 눌렸음)
+    view.onpointerdown = e => { mapDrag = { x: e.clientX, y: e.clientY, px: mapPan.x, py: mapPan.y, id: e.pointerId }; mapMoved = false; };
+    view.onpointermove = e => { if (!mapDrag) return; const dx = e.clientX - mapDrag.x, dy = e.clientY - mapDrag.y; if (!mapMoved && Math.abs(dx) + Math.abs(dy) > 6) { mapMoved = true; try { view.setPointerCapture(mapDrag.id); } catch (_) {} view.classList.add('drag'); } if (!mapMoved) return; mapPan.x = mapDrag.px + dx; mapPan.y = mapDrag.py + dy; applyPan(inner); };
     view.onpointerup = view.onpointercancel = () => { mapDrag = null; view.classList.remove('drag'); setTimeout(() => { mapMoved = false; }, 0); };
     view.onwheel = e => { e.preventDefault(); const r = view.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, z0 = mapZoom; mapZoom = clamp(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), 0.5, 1.5); mapPan.x = mx - (mx - mapPan.x) * mapZoom / z0; mapPan.y = my - (my - mapPan.y) * mapZoom / z0; applyPan(inner); };
   }
@@ -246,7 +247,7 @@ const UI = (() => {
       $('fxLayer').appendChild(p); setTimeout(() => p.remove(), 800);
     }
   }
-  function openTree(mode) { treeMode = mode; selSkill = mode === 'common' ? 'teeth' : 'dmg'; hide('dex'); hide('promo'); openPanel('tree', buildTree); }
+  function openTree(mode) { treeMode = mode; selSkill = mode === 'common' ? 'core' : 'dmg'; hide('dex'); hide('promo'); openPanel('tree', buildTree); }
 
   // ── 스탯 ── (지금 능력치 + 찍은 공용 스킬의 현재/만렙 효과 + 조각 강화 상위 종)
   function renderStats() {
