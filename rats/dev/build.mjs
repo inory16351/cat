@@ -28,6 +28,9 @@ for (const name of [...new Set([...data.matchAll(/img: '([a-z_]+)'/g)].map(m => 
   const p = path.join(ROOT, 'assets', 'v2', 'bg', name + '.png');
   if (existsSync(p)) assets[rel(p)] = await webpUri(p, 1536);
 }
+// 고양이 방치 게임의 고양이 파츠 (연구소 고양이·고양이 보스)
+const catParts = path.join(ROOT, 'assets', 'v2', 'parts');
+if (existsSync(catParts)) for (const p of walk(catParts).sort()) if (p.endsWith('.png')) assets[rel(p)] = await webpUri(p, 360);
 const ratsDir = path.join(ROOT, 'assets', 'rats');
 if (existsSync(ratsDir)) for (const p of walk(ratsDir).sort()) {
   const stem = path.basename(p, '.png');

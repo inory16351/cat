@@ -1,0 +1,14 @@
+  ✓ front_rs5 (153s)
+  ✂ rs_up 190×234
+  ✂ rs_up_bow 272×196
+  ✂ rs_low 224×234
+  ✂ rs_low_crouch 318×190
+  ✂ rs_leg_kneel 177×223
+  ✂ rs_leg_kneeup 140×273
+  ✂ rs_arm_reach 114×274
+  ✂ rs_arm_punch 236×273
+  ✂ rs_arm_back 270×248
+  ✂ rs_head_fwd 271×324
+  ✂ rs_tail_sweep 285×341
+  ✂ rs_cape_flare 384×263
+front_meta.js: 35개

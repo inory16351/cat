@@ -5,19 +5,20 @@
 //   ② 상황극(ULT_ENG[type].dur초): 게임은 계속 진행. 쥐 주변 반경 안만 휩쓸고 벽은 안 부숨 → 슈퍼 점프보다 약함
 //   ③ 끝나면 "🏆 업적 달성" 알림
 // 필살기가 붙잡은 쥐(s.rats, r.ultOn)와 물건(s.items, state 'held')은 끝날 때 반드시 풀어준다(ultRelease).
-const ULT_CUT = 1.4, ULT_R = 560, TABLE_W = 240;
+const ULT_CUT = 1.4, ULT_R = 560, TABLE_W = 240, PYR_W = 320;
 
 function tryUlt(dt) {
   if (G.ult || G.sj) return;
   G.ultCool = (G.ultCool ?? 40) - dt;
-  if (G.ultCool > 0 || Math.random() >= ULT_CHANCE * dt || document.querySelector('.screen:not(.hidden)')) return;
+  if (G.ultCool > 0 || Math.random() >= ULT_CHANCE * (1 + 0.2 * lv('ultcd')) * dt || document.querySelector('.screen:not(.hidden)')) return;
   const pool = G.rats.filter(r => r.sp.ult && !r.temp && !r.ultOn && onScreen(r.x, r.y, -80));
   if (pool.length) startUlt(pick(pool));
 }
 // 테스트: 24종 순서대로. 그 종이 화면에 없으면 화면 가운데에 잠깐(15초) 불러옴
-function testUlt() {
+// idx 를 주면 그 필살기 (🎬 필살기 목록에서 고름), 안 주면 다음 순서
+function testUlt(idx) {
   if (G.ult || G.sj || !G.running) return false;
-  G.ultTest = ((G.ultTest ?? -1) + 1) % ULT_LIST.length;
+  G.ultTest = idx ?? ((G.ultTest ?? -1) + 1) % ULT_LIST.length;
   const u = ULT_LIST[G.ultTest];
   let r = G.rats.find(o => o.sp.id === u.id && !o.ultOn && onScreen(o.x, o.y, -80));
   if (!r) {
@@ -34,20 +35,23 @@ function startUlt(r) {
   r.trick = null; r.sleep = 0; r.vx = r.vy = 0; r.rushT = 0; r.z = 0; r.vz = 0;
   const u = r.sp.ult;
   G.ult = { r, u, eng: ULT_ENG[u.type], phase: 'cut', t: 0, zoom: 1, caps: [], rats: [], items: [], beatsDone: new Set(), hitT: 0, x0: r.x, y0: r.y };
+  if (G.ult.eng.pre) G.ult.eng.pre(G.ult);             // 컷인 전 준비 (줴리: 이번 퀴즈를 골라 컷인 제목으로)
   r.ultOn = true;
-  G.ultCool = ULT_COOL; G.banner = null; G.hitstop = 0;
+  G.ultCool = ULT_COOL * (1 - 0.06 * lv('ultcd')); G.banner = null; G.hitstop = 0;
   flash(u.col, 0.35); Sfx.comboWord();
   return true;
 }
 
 // ── 공용 도우미 ──
 const ultD = s => ratDamage(s.r) * 25;
+const ULT_ITEM = 8, ultItemD = s => ratDamage(s.r) * ULT_ITEM;     // 필살기가 물건 하나에 주는 피해 (무조건 박살 X)
 function ucap(s, text, o = {}) { s.caps = s.caps.filter(c => c.y !== (o.y ?? 0.78)); s.caps.push({ text, t0: G.t, dur: o.dur ?? 1.3, size: o.size ?? 34, col: o.col ?? '#fff', sh: o.sh ?? '#3c322d', y: o.y ?? 0.78 }); }
 function grabRat(s, o) { if (o.ultOn && o !== s.r) return false; if (o.act) endAct(o); o.trick = null; o.sleep = 0; o.vx = o.vy = 0; o.ultOn = true; if (!s.rats.includes(o)) s.rats.push(o); return true; }
 function grabItem(s, it) { if (it.state !== 'rest' || it.appear < 1) return false; it.state = 'held'; it.pvx = it.pvy = 0; it.hx = it.x; it.hy = it.y; s.items.push(it); return true; }
-// 붙잡은(또는 가만히 있는) 물건을 날려보냄 → 떨어지면 박살
-function dropItem(s, it, vx, vy, vz) {
+// 붙잡은(또는 가만히 있는) 물건을 날려보냄 → 피해(dmg, 기본 ultItemD)로 체력이 0 이면 떨어져서 박살, 남으면 멀쩡히 착지
+function dropItem(s, it, vx, vy, vz, dmg = ultItemD(s)) {
   if (it.state !== 'held' && it.state !== 'rest') return;
+  skillHitItem(it, dmg, s.r);
   it.state = 'fly'; it.vx = vx; it.vy = vy; it.vz = vz; it.noShadow = false; it.vr = rand(10, 22) * (Math.random() < 0.5 ? -1 : 1);
   it.hitSet = new Set(); it.air = Math.max(1, it.air); it.by = s.r; it.sq = 1.4; it.pvx = it.pvy = 0;
   s.items = s.items.filter(o => o !== it);
@@ -63,6 +67,7 @@ const ratsNear = (s, x, y, R) => G.rats.filter(o => o !== s.r && !o.ultOn && Mat
 function crush(s, x, y, R, vx, vy) {
   for (const it of itemsIn(x, y, R)) { const a = Math.atan2(it.y - y, it.x - x) + rand(-0.3, 0.3); flingItem(s, it, a, 520 + Math.hypot(vx, vy) * 0.4, rand(350, 520)); }
   for (const o of ratsNear(s, x, y, R + 10)) ragdoll(o, Math.atan2(o.y - y, o.x - x), 420, 380);
+  blastActorsIn(x, y, R + 20, 560, ultD(s) * 0.5, s.r);          // 사람·보스·고양이도 깔아뭉갬
 }
 // 벽에 튕기며 움직이기 (열린 방 안)
 function bounceMove(o, rad, dt) { const px = o.x, py = o.y; o.x += o.vx * dt; o.y += o.vy * dt; confine(o, rad, px, py, 1, null); }
@@ -70,7 +75,7 @@ function aimMost(r, R = 700) { let bx = 0, by = 0; for (const it of itemsIn(r.x,
 function releaseRat(o, fling) { o.ultOn = false; o.pose = null; o.sjRot = 0; o.ultSpin = false; o.under = false; o.drawUnder = null; if (fling && o.z > 0) { o.vz = 0; } }
 // 끝: 붙잡은 것 전부 풀기
 function ultRelease(s) {
-  for (const it of [...s.items]) dropItem(s, it, rand(-120, 120), rand(-120, 120), 60);
+  for (const it of [...s.items]) dropItem(s, it, rand(-120, 120), rand(-120, 120), 60, 0);   // 끝나서 놓아줄 땐 피해 없음
   for (const o of s.rats) if (o !== s.r) releaseRat(o, true);
   s.rats = [];
 }
@@ -145,33 +150,41 @@ const ULT_ENG = {
   },
   // 쥐왕: 주변 쥐 꼬리가 엉켜 거대 쥐 공 (실존 현상 '쥐왕') → 굴러다님
   knot: {
-    dur: 3.6,
-    beats: [[0.1, s => ucap(s, '꼬리가… 엉켰다?!')], [1.2, s => ucap(s, '※ 실제로 존재하는 현상입니다', { size: 28 })], [2.6, s => ucap(s, '(아무도 못 풀어요)')]],
+    dur: 3.9,
+    beats: [[0.1, s => ucap(s, '꼬리가… 엉켰다?!')], [1.3, s => ucap(s, '※ 실제로 존재하는 현상입니다', { size: 28 })], [2.8, s => ucap(s, '(아무도 못 풀어요)')]],
     start(s) {
       const r = s.r;
+      // 화면에 보이는 쥐 중 가까운 순으로 최대 20마리(쥐왕 포함). 반경 제한 없음 → 화면을 넓혀도 다 모임
       s.knot = [r];
-      for (const o of G.rats.filter(o => o !== r && !o.ultOn && Math.hypot(o.x - r.x, o.y - r.y) < 520).slice(0, 18)) if (grabRat(s, o)) s.knot.push(o);
+      const cand = G.rats.filter(o => o !== r && !o.ultOn && onScreen(o.x, o.y, 40)).sort((p, q) => Math.hypot(p.x - r.x, p.y - r.y) - Math.hypot(q.x - r.x, q.y - r.y));
+      for (const o of cand) { if (s.knot.length >= 20) break; if (grabRat(s, o)) s.knot.push(o); }
       s.ball = { x: r.x, y: r.y, vx: 0, vy: 0, z: 0, vz: 0 }; s.rot = 0; s.hops = 0;
-      s.knot.forEach((o, i) => { o.kx = o.x; o.ky = o.y; o.ki = i; });
+      // 가까운 쥐는 살짝 늦게 출발 → 멀리서 날아오는 쥐와 비슷하게 도착
+      const far = Math.max(1, ...s.knot.map(o => Math.hypot(o.x - r.x, o.y - r.y)));
+      s.knot.forEach((o, i) => { o.kx = o.x; o.ky = o.y; o.kz = o.z || 0; o.ki = i; o.kd = 0.25 * (1 - Math.hypot(o.x - r.x, o.y - r.y) / far) * Math.random(); });
     },
     step(s, dt, k) {
-      const b = s.ball, n = s.knot.length, R = 24 + 4 * n;
-      const gather = Math.min(1, s.t / 0.6);
+      const b = s.ball, n = s.knot.length, R = Math.min(240, 26 + 15 * Math.sqrt(n));
       b.z = b.z || 0; b.vz = b.vz || 0;
-      if (s.t > 0.6) {
-        // 통통 튀며 이동: 착지할 때마다 쿵 + 다음 방향으로 점프
-        b.vz -= 2200 * dt; b.z += b.vz * dt; bounceMove(b, R, dt); s.rot += dt * 6;
+      if (s.t > 0.9) {
+        // 통통 튀며 이동: 착지할 때마다 쿵 + 다음 방향으로 점프 (클수록 천천히 구름)
+        b.vz -= 2200 * dt; b.z += b.vz * dt; bounceMove(b, R, dt); s.rot += dt * 6 * Math.min(1, 75 / R);
         if (b.z <= 0) {
-          b.z = 0; const t = nearestItem({ x: b.x, y: b.y }, 460), a = t ? Math.atan2(t.y - b.y, t.x - b.x) : rand(0, 6.28);
+          b.z = 0; const t = nearestItem({ x: b.x, y: b.y }, 460 + R), a = t ? Math.atan2(t.y - b.y, t.x - b.x) : rand(0, 6.28);
           b.vx = Math.cos(a) * 380; b.vy = Math.sin(a) * 380; b.vz = 820;
-          if (s.hops++ > 0) { shock(b.x, b.y, R + 90, ultD(s) * 0.4, s.r, '#d9a441', 1.8); crush(s, b.x, b.y, R + 40, 0, 0); addShake(0.2); Sfx.thump(1); }
+          if (s.hops++ > 0) { shock(b.x, b.y, R + 90, ultD(s) * 0.4, s.r, '#d9a441', 1.8); crush(s, b.x, b.y, R + 40, 0, 0); addShake(0.2 + Math.min(0.2, n / 400)); Sfx.thump(1); }
         }
       }
+      // 쥐 공: 피보나치 구 표면에 고르게 (0번 = 쥐왕, 공 앞면 가운데). 모일 땐 포물선으로 슝
+      const c = Math.cos(s.rot), sn = Math.sin(s.rot);
       for (const o of s.knot) {
-        const a = o.ki / n * 6.28 + s.rot, tx = b.x + Math.cos(a) * R * 0.85, tz = R + Math.sin(a) * R * 0.85;
-        o.x = rLerp(o.kx, tx, sjEase(gather)); o.y = rLerp(o.ky, b.y + Math.sin(o.ki) * 6, sjEase(gather)); o.z = tz * gather + (b.z || 0);
-        o.sjRot = a + Math.PI / 2; o.pose = POSE_FLAIL(); o.face = 1;
+        const i = o.ki, dy = 1 - 2 * (i + 0.5) / n, rad = Math.sqrt(Math.max(0, 1 - dy * dy)), th = i * 2.39996;
+        const px = Math.cos(th) * rad, pz = Math.sin(th) * rad, rx = px * c - pz * sn, rz = px * sn + pz * c;
+        const e = sjEase(clamp((s.t - o.kd) / 0.65, 0, 1)), hop = Math.sin(e * Math.PI) * Math.min(260, 80 + Math.hypot(o.kx - b.x, o.ky - b.y) * 0.25);
+        o.x = rLerp(o.kx, b.x + rx * R, e); o.y = rLerp(o.ky, b.y - dy * R * 0.45, e); o.z = rLerp(o.kz, b.z + R + rz * R, e) + hop;
+        o.sjRot = e > 0.6 ? Math.atan2(rz, rx) + Math.PI / 2 : 0; o.pose = POSE_FLAIL(); o.face = 1;
       }
+      if (!s.gatherFx && s.t > 0.75) { s.gatherFx = true; ring(b.x, b.y, R + 30, '#d9a441', 0.35, 8); addShake(0.25); Sfx.thump(1.2); }
       s.R = R;
     },
     end(s) {
@@ -181,9 +194,10 @@ const ULT_ENG = {
       if (onScreen(b.x, b.y)) { ring(b.x, b.y, 120, '#fff', 0.4, 8); popup(b.x, b.y, '풀렸다!!', '#fff3bf', 24, 1, 80); Sfx.pop(); }
     },
     draw(s) {
-      if (!s.ball || s.t < 0.4) return;
+      if (!s.ball || s.t < 0.7) return;
       const b = s.ball, R = s.R || 30;
       ctx.save(); ctx.fillStyle = 'rgba(30,15,5,.2)'; ctx.beginPath(); ctx.ellipse(b.x, b.y * TILT, R, R * 0.4, 0, 0, 6.28); ctx.fill(); ctx.translate(b.x, b.y * TILT - R - (b.z || 0)); ctx.strokeStyle = '#e0b0a8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      const q = R / 50; ctx.scale(q, q); ctx.lineWidth = 3 / Math.sqrt(q);
       for (let i = 0; i < 7; i++) { const a = i * 0.9 + s.rot; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 8, Math.sin(a) * 8); ctx.bezierCurveTo(Math.cos(a + 2) * 22, Math.sin(a + 2) * 22, Math.cos(a - 1) * 18, Math.sin(a - 1) * 18, Math.cos(a + 3) * 10, Math.sin(a + 3) * 10); ctx.stroke(); }
       ctx.restore();
     },
@@ -304,7 +318,7 @@ const ULT_ENG = {
       for (const g of s.ghosts) g.life -= dt; s.ghosts = s.ghosts.filter(g => g.life > 0);
       if (k >= 0.65 && !s.del) {
         s.del = true; G.quiet = true;
-        for (const it of s.vict) if (it.state === 'rest') { if (onScreen(it.x, it.y)) for (let i = 0; i < 6; i++) particle({ x: it.x + rand(-it.r, it.r), y: it.y + rand(-it.r, it.r), z: rand(0, 30), vx: 0, vy: 0, vz: rand(40, 120), life: 0.6, max: 0.6, size: rand(4, 8), color: pick(['#a58bb8', '#9dd5a8', '#e8786a', '#fff']), type: 'paper', rot: 0, vr: 0, drag: 0 }); it.state = 'fly'; it.by = s.r; smashItem(it); }
+        for (const it of s.vict) if (it.state === 'rest') { if (onScreen(it.x, it.y)) for (let i = 0; i < 6; i++) particle({ x: it.x + rand(-it.r, it.r), y: it.y + rand(-it.r, it.r), z: rand(0, 30), vx: 0, vy: 0, vz: rand(40, 120), life: 0.6, max: 0.6, size: rand(4, 8), color: pick(['#a58bb8', '#9dd5a8', '#e8786a', '#fff']), type: 'paper', rot: 0, vr: 0, drag: 0 }); skillBlastItem(it, ultItemD(s) * 1.5, s.r); }
         G.quiet = false; G.items = G.items.filter(it => it.state !== 'dead');
         flash('#fff', 0.4); Sfx.boom(1);
       }
@@ -325,32 +339,104 @@ const ULT_ENG = {
     },
   },
   // 파라오 생쥐: 콩가 춤 행렬 → 박수 한 번에 전부 폭발
-  conga: {
-    dur: 3.6,
-    beats: [[0.1, s => ucap(s, '🎵 워크 라이크 언 이집션 🎵')], [2.9, s => ucap(s, '짝!!', { size: 70, col: '#fff3bf', y: 0.5, dur: 0.8 })]],
+  // 파라오 쥐: 피라미드가 솟아오름 → 쥐들이 계단에 줄 서서 치즈 상납(다단계 아님) → 뒤집어서 피라미드 팽이 → 쓰러지며 쿵
+  pyramid: {
+    dur: 4.5,
+    beats: [[0.1, s => ucap(s, '짐의 피라미드를 받들라!')], [0.9, s => ucap(s, '※ 다단계 아닙니다 (진짜로)', { size: 28 })], [1.5, s => ucap(s, '치즈는 전부 꼭대기로~', { col: '#fff3bf' })],
+      [2.2, s => ucap(s, '피라미드… 팽이!!', { size: 60, col: '#fff3bf', y: 0.5, dur: 1 })], [3.95, s => ucap(s, '(어지러워…)')]],
     start(s) {
-      s.hist = []; s.q = [];
-      for (const it of itemsIn(s.r.x, s.r.y, ULT_R).slice(0, 18)) if (grabItem(s, it)) s.q.push(it);
-      for (const o of G.rats.filter(o => o !== s.r && !o.ultOn && Math.hypot(o.x - s.r.x, o.y - s.r.y) < ULT_R).slice(0, 10)) if (grabRat(s, o)) s.q.splice(Math.floor(Math.random() * (s.q.length + 1)), 0, o);
-    },
-    step(s, dt) {
-      const r = s.r;
-      if (s.t < 2.9) {
-        const px = r.x, a = s.t * 1.8;
-        r.x = s.x0 + Math.sin(a) * 170; r.y = s.y0 + Math.sin(a * 2) * 70; confine(r, ratR(r), px, r.y, 0, null);
-        r.face = Math.cos(a) >= 0 ? 1 : -1; r.speed = 250; r.walk += dt * 20;
-        r.pose = { front: Math.sin(G.t * 8) > 0 ? 2.2 : 0.3, farFront: Math.sin(G.t * 8) > 0 ? 0.3 : 2.2, head: Math.sin(G.t * 8) * 0.2, headX: Math.sin(G.t * 8) * 3, tail: 1 };
-        s.hist.push([r.x, r.y]); if (s.hist.length > 400) s.hist.shift();
-        s.q.forEach((o, i) => { const h = s.hist[Math.max(0, s.hist.length - 1 - (i + 1) * 9)]; if (!h) return; const nx = h[0], ny = h[1]; if (o.sp) { o.face = nx > o.x ? 1 : -1; o.speed = 250; o.walk += dt * 20; o.pose = { front: Math.sin(G.t * 8 + i) > 0 ? 2.2 : 0.3, farFront: 0.3, head: 0.1 }; } else { o.z = Math.abs(Math.sin(G.t * 10 + i)) * 24; o.rot = Math.sin(G.t * 8 + i) * 0.5; } o.x = nx; o.y = ny; });
-      } else if (!s.clap) {
-        s.clap = true; r.pose = { ...POSE_UP, front: 1.6, farFront: 1.6 }; G.quiet = true;
-        for (const o of s.q) if (!o.sp && o.state === 'held') { o.state = 'fly'; o.by = r; o.air = 2; smashItem(o); }
-        G.quiet = false; G.items = G.items.filter(it => it.state !== 'dead'); s.items = [];
-        for (const o of s.q) if (o.sp) { releaseRat(o); ragdoll(o, rand(0, 6.28)); }
-        s.rats = [];
-        flash('#f2c14e', 0.3); addShake(0.3); Sfx.boom(1.2); Sfx.clear();
+      const r = s.r, W = PYR_W, im = IMG['art_ult:pyramid'], H = im ? W * im.height / im.width : W * 0.84;
+      s.py = { x: r.x, y: r.y, vx: 0, vy: 0, W, H, rise: 0, flip: 0, lift: 0, spin: 0, wob: 0, top: 0 };
+      // 계단 자리: 아래 단부터 4·4·3·3·2·1칸 (계단 높이는 이미지 기준 한 단 ≈ 높이의 11.8%)
+      const slots = [];
+      [4, 4, 3, 3, 2, 1].forEach((m, ti) => { const hw = W / 2 * (1 - (ti + 1) / 8) * 0.85; for (let j = 0; j < m; j++) slots.push({ dx: m === 1 ? 0 : (j / (m - 1) - 0.5) * 2 * hw, z: H * 0.118 * (ti + 1), ti }); });
+      s.steps = [];
+      const dist = o => Math.hypot(o.x - r.x, o.y - r.y);
+      const cand = G.rats.filter(o => o !== r && !o.ultOn && onScreen(o.x, o.y, 40)).sort((p, q) => dist(p) - dist(q));
+      for (const o of cand) { if (s.steps.length >= slots.length) break; if (grabRat(s, o)) { o.kx = o.x; o.ky = o.y; o.kz = o.z || 0; o.slot = slots[s.steps.length]; o.kd = s.steps.length * 0.035; s.steps.push(o); } }
+      s.tribute = [];
+      for (const it of itemsIn(r.x, r.y, ULT_R).sort((p, q) => dist(p) - dist(q))) {
+        if (dist(it) < W * 0.5) { flingItem(s, it, Math.atan2(it.y - r.y, it.x - r.x), 520, 380); continue; }   // 솟아오를 때 밀려남
+        if (s.tribute.length < 14 && grabItem(s, it)) { it.k0 = 0.95 + s.tribute.length * 0.07; it.side = it.x > r.x ? 1 : -1; s.tribute.push(it); }
       }
     },
+    step(s, dt) {
+      const r = s.r, py = s.py, W = py.W, H = py.H;
+      if (s.t < 0.8) {
+        // ① 모래를 뚫고 솟아오름 (파라오는 꼭대기에 실려 올라감)
+        py.rise = sjEase(s.t / 0.8);
+        r.x = py.x; r.y = py.y; r.z = (H - 6) * py.rise; r.pose = { ...POSE_UP }; r.face = 1;
+        if (Math.random() < 0.8) for (const sx of [-1, 1]) dust(py.x + sx * rand(0, W * 0.5), py.y + rand(-10, 16), 1, 1.2);
+        addShake(0.03); if ((s.hitT -= dt) <= 0) { s.hitT = 0.12; Sfx.thump(0.6); }
+      } else if (s.t < 2.2) {
+        // ② 계단에 줄 선 쥐들이 절 + 물건이 계단을 타고 꼭대기로 올라가서 상납(박살 → 치즈)
+        py.rise = 1; r.x = py.x; r.y = py.y; r.z = H - 6; r.face = Math.sin(G.t * 4) > 0 ? 1 : -1;
+        r.pose = { ...POSE_UP, front: 2.4 + Math.sin(G.t * 10) * 0.3, farFront: 2.2 - Math.sin(G.t * 10) * 0.3 };
+        if (!s.said) { s.said = true; r.say = { text: '짐에게 바쳐라!', t: 1.1 }; }
+        for (const it of [...s.tribute]) {
+          if (it.state !== 'held') { s.tribute = s.tribute.filter(o => o !== it); continue; }
+          const k = clamp((s.t - it.k0) / 0.55, 0, 1); if (k <= 0) continue;
+          const bx = py.x + it.side * W * 0.3;
+          if (k < 0.4) { const e = sjEase(k / 0.4); it.x = rLerp(it.hx, bx, e); it.y = rLerp(it.hy, py.y + 10, e); it.z = Math.sin(e * Math.PI) * 60; }
+          else { const e = (k - 0.4) / 0.6, st = Math.floor(e * 7); it.x = rLerp(bx, py.x, e); it.y = py.y + 10 - e * 6; it.z = H * 0.118 * st + Math.abs(Math.sin(e * 7 * Math.PI)) * 16; }
+          if (k >= 1) {
+            s.tribute = s.tribute.filter(o => o !== it); s.items = s.items.filter(o => o !== it);
+            it.air = 2; it.z = H; skillBlastItem(it, ultItemD(s) * 1.5, r, rand(0, 6.28), 160, 60); G.items = G.items.filter(o => o.state !== 'dead');
+            if (onScreen(py.x, py.y)) { popup(py.x, py.y, '상납!', '#f2c14e', 18, 0.7, H + 20); burst(py.x, py.y, 6, { colors: ['#f2c14e', '#fff3bf'], type: 'star', min: 100, max: 240, s0: 3, s1: 6, z: H }); }
+          }
+        }
+      } else if (s.t < 2.5) {
+        // ③ 벌떡 뒤집기: 계단의 쥐들은 튕겨 나가고 파라오는 뒤집힌 밑면 위로
+        if (!s.flipped) {
+          s.flipped = true;
+          for (const it of [...s.tribute]) if (it.state === 'held') flingItem(s, it, rand(0, 6.28), 420, 420);
+          s.tribute = [];
+          for (const o of s.steps) { releaseRat(o); ragdoll(o, Math.atan2(o.y - py.y, o.x - py.x + rand(-1, 1)), 520, 460); }
+          s.rats = s.rats.filter(o => !s.steps.includes(o)); s.steps = [];
+          flash('#fff3bf', 0.25); addShake(0.3); Sfx.boom(0.9); Sfx.dash();
+        }
+        const e = (s.t - 2.2) / 0.3; py.flip = e; py.lift = Math.sin(e * Math.PI) * 120;
+        r.x = py.x; r.y = py.y; r.z = H + py.lift + 40 * Math.sin(e * Math.PI); r.pose = POSE_FLAIL();
+      } else if (s.t < 3.9) {
+        // ④ 피라미드 팽이: 뾰족한 끝으로 서서 뱅글뱅글 돌며 휩쓸기 (파라오도 같이 돎)
+        py.flip = 1; py.lift = 0; py.spin += dt * 26; py.wob = Math.sin(s.t * 7) * 0.12;
+        if (!s.spinning) { s.spinning = true; const a = aimMost(r, 800); py.vx = Math.cos(a) * 430; py.vy = Math.sin(a) * 430; }
+        const pvx = py.vx, pvy = py.vy; bounceMove(py, W * 0.3, dt);
+        if (pvx !== py.vx || pvy !== py.vy) { addShake(0.12); Sfx.thump(0.8); }
+        if ((s.turnT = (s.turnT ?? 0.5) - dt) <= 0) { s.turnT = 0.5; const a = aimMost({ x: py.x, y: py.y, face: 1 }, 700); py.vx = rLerp(py.vx, Math.cos(a) * 430, 0.6); py.vy = rLerp(py.vy, Math.sin(a) * 430, 0.6); }
+        for (const it of itemsIn(py.x, py.y, W * 0.42)) flingItem(s, it, Math.atan2(it.y - py.y, it.x - py.x) + 1.2, 680, 420);
+        for (const o of ratsNear(s, py.x, py.y, W * 0.4)) ragdoll(o, Math.atan2(o.y - py.y, o.x - py.x) + 1.2, 560, 420);
+        if ((s.hitT -= dt) <= 0) { s.hitT = 0.12; shock(py.x, py.y, W * 0.35, ultD(s) * 0.12, r, '#e3c46a', 0.5); dust(py.x, py.y, 2, 1); stampAt(py.x, py.y, m => { m.fillStyle = 'rgba(227,196,106,.28)'; m.beginPath(); m.ellipse(py.x, py.y, 26, 16, 0, 0, 6.28); m.fill(); }); }
+        if (Math.floor(py.spin / 3) !== s.whoosh) { s.whoosh = Math.floor(py.spin / 3); Sfx.dash(); }
+        r.x = py.x; r.y = py.y; r.z = H; r.ultSpin = true; r.pose = POSE_FLAIL();
+      } else {
+        // ⑤ 비틀비틀 옆으로 쓰러지며 쿵 → 파라오 튕겨 나감
+        py.vx *= Math.max(0, 1 - dt * 6); py.vy *= Math.max(0, 1 - dt * 6); bounceMove(py, W * 0.3, dt);
+        const e = clamp((s.t - 3.9) / 0.3, 0, 1); py.top = e * e; r.ultSpin = false;
+        if (e >= 1 && !s.fell) {
+          s.fell = true;
+          const fx = py.x - H * 0.5, fy = py.y;
+          shock(fx, fy, W * 0.8, ultD(s) * 0.8, r, '#e3c46a', 3);
+          for (const it of itemsIn(fx, fy, W * 0.75)) flingItem(s, it, Math.atan2(it.y - fy, it.x - fx), 480, 560);
+          for (const o of ratsNear(s, fx, fy, W * 0.7)) ragdoll(o, Math.atan2(o.y - fy, o.x - fx), 480, 420);
+          burst(fx, fy, 30, { colors: ['#e3c46a', '#d9b27a', '#f3e1b8'], min: 200, max: 600, s0: 5, s1: 11, z: 20 });
+          dust(fx, fy, 14, 2.2); flash('#fff3bf', 0.4); addShake(0.5); Sfx.boom(1.4);
+          s.flyX = r.x; s.flyZ = r.z; s.flyT = s.t;
+        }
+        if (s.fell) { const k = clamp((s.t - s.flyT) / 0.3, 0, 1); r.x = s.flyX - k * 160; r.z = Math.max(0, s.flyZ * (1 - k) + Math.sin(k * Math.PI) * 90); r.face = -1; }
+        else { const a = py.top * 1.4; r.x = py.x - Math.sin(a) * H; r.z = H * Math.cos(a); }
+        r.pose = POSE_FLAIL();
+      }
+      // 계단 위 쥐들: 한 명씩 폴짝 뛰어올라 자리 잡고 넙죽 절
+      for (const o of s.steps) {
+        const e = sjEase(clamp((s.t - 0.5 - o.kd) / 0.45, 0, 1)), sl = o.slot;
+        o.x = rLerp(o.kx, py.x + sl.dx, e); o.y = rLerp(o.ky, py.y + 14 + sl.ti * 0.5, e); o.z = rLerp(o.kz, sl.z * py.rise, e) + Math.sin(e * Math.PI) * 90;
+        o.face = sl.dx > 0 ? -1 : 1;
+        o.pose = e >= 1 ? (Math.sin(G.t * 9 + sl.dx * 0.05 + sl.ti) > 0 ? { head: 0.6, headX: -3, front: 1.3, farFront: 1.2, tilt: 0.3, tail: 0.8 } : { ...POSE_UP, front: 2.4, farFront: 2.2 }) : POSE_FLAIL();
+      }
+    },
+    end(s) { s.r.ultSpin = false; s.r.z = 0; },
+    sorted(s) { return s.py && s.t < 4.4 ? [{ y: s.py.y - 1, f: () => drawPyramid(s) }] : []; },
   },
   // 외계인 생쥐: UFO 납치 → 공중에서 투척 (본인도 딸려감)
   abduct: {
@@ -407,7 +493,7 @@ const ULT_ENG = {
       r.pose = { head: -0.35, headX: -4, front: 0.4, farFront: 0.3, tail: 1.1, sx: 1.05 };
       ultWalk(s, dt, 110);                                        // 퐁듀를 뿜으며 어슬렁
       if (s.t < 0.3 || s.t > 2.4) return;
-      for (let i = 0; i < 5; i++) { const aa = a + rand(-0.35, 0.35), sp = rand(0.4, 1) * range * 2.5; particle({ x: r.x, y: r.y, z: 16, vx: Math.cos(aa) * sp, vy: Math.sin(aa) * sp, vz: rand(20, 80), g: 400, life: rand(0.4, 0.6), max: 0.6, size: rand(5, 10), color: pick(['#f0c878', '#e3c46a', '#fff3bf']), type: 'spark', drag: 1.5 }); }
+      cheeseSpray(r, a, range, 6, 0.35, { k: 2.5, g: 400, drag: 1.5 });
       if ((s.hitT -= dt) > 0) return;
       s.hitT = 0.1;
       const d = rand(80, range), px = r.x + Math.cos(a) * d, py = r.y + Math.sin(a) * d;
@@ -484,7 +570,7 @@ const ULT_ENG = {
       if (s.t < 0.5) { if (Math.random() < 0.6) dust(r.x, r.y, 1, 1); return; }
       const cyc = 0.32, idx = Math.floor((s.t - 0.5) / cyc), ck = ((s.t - 0.5) % cyc) / cyc;
       if (idx >= 8) { r.under = false; r.z = Math.max(0, r.z - dt * 400); return; }
-      if (idx !== s.pops) { s.pops = idx; s.from = [r.x, r.y]; s.tgt = nearestItem(r, 560) || { x: s.x0 + rand(-200, 200), y: s.y0 + rand(-150, 150) }; }
+      if (idx !== s.pops) { s.pops = idx; s.from = [r.x, r.y]; { const rm = roomOf(r.x, r.y) + ''; s.tgt = nearestItem(r, 560, it => roomOf(it.x, it.y) + '' === rm) || { x: clamp(s.x0 + rand(-200, 200), rm.split(',')[0] * RW + 60, (+rm.split(',')[0] + 1) * RW - 60), y: clamp(s.y0 + rand(-150, 150), rm.split(',')[1] * RH + 60, (+rm.split(',')[1] + 1) * RH - 60) }; } /* 땅속으로 벽을 넘어가지 않게 같은 방 안에서만 */ }
       r.under = ck < 0.6;
       if (ck < 0.6 && s.from) { const e = ck / 0.6; r.x = rLerp(s.from[0], s.tgt.x, e); r.y = rLerp(s.from[1], s.tgt.y, e); r.z = 0; }
       else if (!s['p' + idx]) {
@@ -890,7 +976,7 @@ Object.assign(ULT_ENG, {
       }
       if (s.t > 4.2 && !s.boom) {
         s.boom = true; G.quiet = true;
-        for (const it of s.vict) if (it.state === 'rest') { it.state = 'fly'; it.by = r; it.air = 2; if (onScreen(it.x, it.y)) burst(it.x, it.y, 8, { colors: ['#cdb4db', '#fff3bf', '#fff'], type: 'star', min: 150, max: 420, s0: 3, s1: 7, z: 20 }); smashItem(it); }
+        for (const it of s.vict) if (it.state === 'rest') { it.air = 2; if (onScreen(it.x, it.y)) burst(it.x, it.y, 8, { colors: ['#cdb4db', '#fff3bf', '#fff'], type: 'star', min: 150, max: 420, s0: 3, s1: 7, z: 20 }); skillBlastItem(it, ultItemD(s) * 1.5, r); }
         G.quiet = false; G.items = G.items.filter(it => it.state !== 'dead');
         for (let i = 0; i < 3; i++) ring(gx, gy, 200 + i * 160, i % 2 ? '#fff' : '#cdb4db', 0.6 + i * 0.1, 12);
         flash('#cdb4db', 0.5); addShake(0.45); Sfx.boom(1.4); Sfx.clear();
@@ -1086,11 +1172,18 @@ function updateUlt(dt) {
   (E.beats || []).forEach(([bt, fn], i) => { if (s.t >= bt && !s.beatsDone.has(i)) { s.beatsDone.add(i); fn(s); } });
   s.r.vx = s.r.vy = 0;
   E.step(s, dt, Math.min(1, s.t / E.dur));
+  // 필살기 쓰는 쥐 근처의 사람·고양이는 휘말려 날아가고, 보스는 크게 깎임 (0.3초마다)
+  if ((s.actorT = (s.actorT ?? 0.3) - dt) <= 0) { s.actorT = 0.3; blastActorsIn(s.r.x, s.r.y, 220, 620, ultD(s) * 0.4, s.r); }
   if (s.t >= E.dur) endUlt();
 }
 function endUlt() {
   const s = G.ult; if (!s) return;
   if (s.phase === 'act' && s.eng.end) s.eng.end(s);
+  if (s.phase === 'act') {
+    // 마무리: 필살기 범위 안 사람·고양이 전부 날리기 + 보스에 큰 피해
+    const n = blastActorsIn(s.r.x, s.r.y, ULT_R, 700, ultD(s) * 3, s.r);
+    if (n && onScreen(s.r.x, s.r.y)) popup(s.r.x, s.r.y, `휘말린 인간 ${n}명!`, '#fff3bf', 22, 1.1, 120);
+  }
   ultRelease(s);
   const r = s.r;
   r.ultOn = false; r.pose = null; r.z = Math.max(0, r.z); r.sjRot = 0; r.hideBody = false; r.jit = 0; r.ultSpin = false; r.under = false; r.drawUnder = null; r.speed = 0;
@@ -1132,6 +1225,44 @@ function drawVehicle(g, s) {
   }
   g.restore();
 }
+// 피라미드 (파라오): 솟아오름(rise) → 뒤집기(flip) → 팽이(spin·wob) → 쓰러짐(top). Codex 이미지(ult:pyramid) 없으면 코드 그림
+function drawPyramid(s) {
+  const py = s.py, W = py.W, H = py.H, gy = py.y * TILT;
+  const img = g => { if (!ultArt(g, 'pyramid', W)) drawPyramidShape(g, W, H); };
+  ctx.save();
+  if (py.top >= 1) ctx.globalAlpha = Math.max(0, 1 - (s.t - 4.2) / 0.2);
+  const shW = py.flip >= 1 ? W * 0.2 : W * 0.5 * py.rise;
+  ctx.fillStyle = 'rgba(30,15,5,.22)'; ctx.beginPath(); ctx.ellipse(py.x, gy, Math.max(1, shW), Math.max(1, shW * 0.22), 0, 0, 6.28); ctx.fill();
+  if (!py.flip) {
+    // 땅속에서 솟는 중: 바닥선 아래는 잘라냄
+    ctx.beginPath(); ctx.rect(py.x - W, gy - H - 60, W * 2, H + 60); ctx.clip();
+    ctx.translate(py.x + (py.rise < 1 ? rand(-2, 2) : 0), gy + H * (1 - py.rise));
+    img(ctx);
+  } else if (py.flip < 1) {
+    // 뒤집는 중: 가운데를 축으로 반 바퀴
+    ctx.translate(py.x, gy - H / 2 - py.lift); ctx.rotate(py.flip * Math.PI); ctx.translate(0, H / 2);
+    img(ctx);
+  } else {
+    // 팽이: 뾰족한 끝이 바닥. 가로로 납작해졌다 펴지며(좌우 뒤집힘) 도는 것처럼, 쓰러질 땐 끝을 축으로 왼쪽으로 눕기
+    ctx.translate(py.x, gy); ctx.rotate(py.wob - py.top * 1.4);
+    const c = Math.cos(py.spin);
+    ctx.scale((c >= 0 ? 1 : -1) * (0.35 + 0.65 * Math.abs(c)), -1);
+    ctx.translate(0, H);
+    img(ctx);
+  }
+  ctx.restore();
+  if (py.flip >= 1 && !py.top) {
+    // 회전 바람 자국
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) { const a = py.spin * 0.5 + i * 2.1, yy = gy - H * (0.3 + i * 0.22); ctx.beginPath(); ctx.ellipse(py.x, yy, W * (0.18 + i * 0.1), 10, 0, a, a + 1.6); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+// 이미지가 없을 때 대체 그림: 7단 계단 + 금색 꼭대기 (기준점 가운데 아래)
+function drawPyramidShape(g, W, H) {
+  for (let i = 0; i < 7; i++) { const w = W * (1 - i / 7.5), h = H / 8; g.fillStyle = i % 2 ? '#e3c08a' : '#d9b27a'; g.fillRect(-w / 2, -h * (i + 1), w, h + 1); g.fillStyle = 'rgba(120,80,40,.18)'; g.fillRect(w * 0.1, -h * (i + 1), w * 0.4, h + 1); }
+  g.fillStyle = '#f2c14e'; g.beginPath(); g.moveTo(-W * 0.07, -H * 0.875); g.lineTo(W * 0.07, -H * 0.875); g.lineTo(0, -H); g.closePath(); g.fill();
+}
 function drawUltWorld() {
   const s = G.ult; if (!s || s.phase !== 'act' || !s.eng.draw) return;
   s.eng.draw(s);
@@ -1153,7 +1284,8 @@ function drawUltCut() {
     if (sc > 0) {
       const sh = t < 0.5 || k > 0.85 ? rand(-3, 3) : 0;
       ctx.save(); ctx.translate(W / 2 + sh, H * 0.22 + sh); ctx.rotate(-0.05); ctx.scale(sc, sc);
-      comicText(u.name, 0, 0, u.name.length > 8 ? 70 : 92, '#fff', shade(u.col, -0.3));
+      const title = s.title || u.name;
+      comicText(title, 0, 0, title.length > 12 ? 52 : title.length > 8 ? 70 : 92, '#fff', shade(u.col, -0.3));
       comicText(`${u.fx} ${TIERS[sp.tier].name} · ${sp.name}의 필살기`, 0, 66, 24, '#fff3bf', '#3c322d');
       ctx.restore();
     }
@@ -1162,12 +1294,15 @@ function drawUltCut() {
   }
   if (s && s.phase === 'act' && s.eng.ui) { ctx.save(); s.eng.ui(s, s.t / s.eng.dur); ctx.restore(); }
   // 자막 (남은 것은 필살기가 끝나도 잠깐 보임)
+  // 필살기 연출(줌 중심 = 화면 0.58)을 안 가리게 전부 상단 띠로: 큰 제목(c.y < 0.7) → HUD 바로 아래, 설명 자막(기본 0.78) → 그 밑.
+  // c.y 는 같은 줄 자막 교체용 키로만 쓰고 그리는 위치는 여기서 정함
   const caps = s ? s.caps : G.lastUlt ? G.lastUlt.caps : [];
   for (const c of caps) {
     const age = G.t - c.t0; if (age > c.dur) continue;
-    const sc = age < 0.12 ? 1.8 - age / 0.12 * 0.8 : 1, a = age > c.dur - 0.25 ? (c.dur - age) / 0.25 : 1;
-    ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * c.y); ctx.scale(sc, sc); ctx.rotate(-0.02);
-    comicText(c.text, 0, 0, c.size, c.col, c.sh); ctx.restore();
+    const sc = age < 0.12 ? 1.5 - age / 0.12 * 0.5 : 1, a = age > c.dur - 0.25 ? (c.dur - age) / 0.25 : 1;
+    const big = c.y < 0.7, y = big ? H * 0.19 : H * 0.3;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, y); ctx.scale(sc, sc); ctx.rotate(-0.02);
+    comicText(c.text, 0, 0, big ? Math.min(c.size, 60) : Math.min(c.size, 30), c.col, c.sh); ctx.restore();
   }
   // 🏆 업적 달성 (고트 시뮬레이터 풍)
   const A = G.achv;

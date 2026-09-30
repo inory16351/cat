@@ -1,7 +1,58 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "cat-game", "runtimeExecutable": "npx", "runtimeArgs": ["-y", "http-server", "-p", "5178", "-c-1", "--silent"], "port": 5178 },
-    { "name": "rat-game", "runtimeExecutable": "npx", "runtimeArgs": ["-y", "http-server", "-p", "5179", "-c-1", "--silent"], "port": 5179, "url": "http://localhost:5179" }
+    {
+      "name": "cat-game",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server",
+        "-p",
+        "5178",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5178
+    },
+    {
+      "name": "rat-game",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server",
+        "-p",
+        "5179",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5179,
+      "url": "http://localhost:5179"
+    },
+    {
+      "name": "rat-sim",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server",
+        "-p",
+        "5181",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5181
+    },
+    {
+      "name": "rat-sim2",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "-y",
+        "http-server",
+        "-p",
+        "5182",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5182
+    }
   ]
 }

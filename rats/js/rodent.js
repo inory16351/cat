@@ -7,6 +7,7 @@ const SHAPES = {
   rat: { body: [3, -9, 16, 8.5], head: [-14, -11, 8, 6.5], snout: [-24, -9], ear: [-11, -17, 4.5], tail: 34, legs: [-10, -4, 8, 13] },
   mouse: { body: [2, -8, 12, 7], head: [-11, -10, 7, 6], snout: [-19, -8.5], ear: [-8, -17, 5.5], tail: 28, legs: [-8, -3, 6, 10] },
   hamster: { body: [0, -11, 13, 10.5], head: [-9, -13, 8.5, 8], snout: [-17, -11], ear: [-8, -21, 2.8], tail: 4, legs: [-8, -3, 4, 9] },
+  squirrel: { body: [2, -10, 13, 8.5], head: [-11, -13, 7.5, 6.5], snout: [-19, -11.5], ear: [-9, -20, 4], tail: 22, legs: [-8, -3, 6, 11] },   // 다람쥐 (코드 그림 대체용)
   gerbil: { body: [2, -9, 13, 8], head: [-11, -11, 7.5, 6.5], snout: [-19, -9.5], ear: [-8, -17, 4.5], tail: 30, legs: [-8, -3, 6, 11] },
 };
 const hatPos = sp => { const h = SHAPES[sp.shape].head; return [h[0] + 1, h[1] - h[3] + 1]; };

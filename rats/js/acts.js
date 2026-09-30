@@ -10,7 +10,7 @@ const ACT_HOLD = { chef: '🔪', nerd: '✏️', samurai: '🗡️', knight: '�
 const ACT_THROW = { emperor: '🏹', robot: '🚀', pirate: '💣', mailman: '✉️', santa: '🎁', scientist: '⚗️' };
 // Codex 파츠 그림에 이미 소품을 들고 있는 종 (따로 또 그리면 두 개가 됨)
 const SHEET_PROP = new Set(['rocker', 'samurai', 'wizard', 'idol', 'skater', 'cosmic', 'sleepy', 'pandahamster', 'courier']);
-const ACT_DUR = { gunkata: 2.4, slam: 1.55, slash: 1.3, barrage: 1.5, sonic: 2.2, beam: 2, breath: 1.7, ball: 3, summon: 0.9, vortex: 2, meteor: 1.6, midas: 1.2, tornado: 2.6, dig: 2.2, cheer: 1.6, feast: 1.8, throw: 1.5 };
+const ACT_DUR = { thunder: 1.9, gunkata: 2.4, slam: 1.55, slash: 1.3, barrage: 1.5, sonic: 2.2, beam: 2, breath: 1.7, ball: 3, summon: 0.9, vortex: 2, meteor: 1.6, midas: 1.2, tornado: 2.6, dig: 2.2, cheer: 1.6, feast: 1.8, throw: 1.5 };
 const ACT_COL = { vampire: '#d9786a', cosmic: '#cdb4db', glowy: '#d6f0a8', cowboy: '#c8a27a', firefighter: '#9fd3e6', dragon: '#f0c878' };
 
 const actLv = r => rsl(r.sp.id, 'act');
@@ -66,12 +66,49 @@ function endAct(r) {
 const nearestItem = (r, R, pred = () => true) => { let best = null, bd = R; near(itemGrid, r.x, r.y, it => { if (it.state !== 'rest' || it.appear < 1 || !pred(it)) return; const d = Math.hypot(it.x - r.x, it.y - r.y); if (d < bd) { bd = d; best = it; } }, Math.ceil(R / CELL)); return best; };
 const itemsIn = (x, y, R) => { const out = []; near(itemGrid, x, y, it => { if (it.state === 'rest' && Math.hypot(it.x - x, it.y - y) < R + it.r) out.push(it); }, Math.ceil(R / CELL) + 1); return out; };
 
+// ── 번개 (람쥐썬더 액션·필살기 공용) ──
+// 하늘(z0 높이)에서 (x, y) 바닥까지 꺾인 번개. 매 프레임 모양이 바뀌어 지지직거림. list 를 주면 거기에(필살기 전용 목록), 아니면 G.zaps
+function strikeBolt(x, y, o = {}, list) {
+  (list || (G.zaps || (G.zaps = []))).push({ x, y, z0: o.z0 ?? 760, life: o.life ?? 0.28, max: o.life ?? 0.28, w: o.w ?? 1, col: o.col || '#bfe8ff', x1: o.x1, y1: o.y1 });
+  if (onScreen(x, y)) { burst(x, y, 6, { colors: ['#fff', '#bfe8ff', '#fff3bf'], type: 'spark', min: 120, max: 360, s0: 2, s1: 4, z: 6 }); ring(x, y, 36 * (o.w ?? 1), '#dff4ff', 0.25, 5); }
+}
+function drawSkyBolt(z) {
+  const k = z.life / z.max, a = Math.min(1, k * 2.2), w = z.w;
+  // 공중(z0)에서 바닥으로 / 또는 바닥을 따라 (x1,y1)→(x,y)
+  const sx = z.x1 ?? z.x + rand(-30, 30), sy = z.x1 !== undefined ? z.y1 * TILT - 6 : z.y * TILT - z.z0, ex = z.x, ey = z.y * TILT - (z.x1 !== undefined ? 6 : 0);
+  const pts = bolt(sx, sy, ex, ey, Math.max(6, Math.round(Math.hypot(ex - sx, ey - sy) / 45)), 22 * w);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = a * 0.35; ctx.strokeStyle = z.col; ctx.lineWidth = 22 * w; polyline(pts);
+  ctx.globalAlpha = a; ctx.lineWidth = 7 * w; polyline(pts);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5 * w; polyline(pts);
+  // 곁가지 2개
+  ctx.globalAlpha = a * 0.8; ctx.strokeStyle = z.col; ctx.lineWidth = 2 * w;
+  for (let b = 0; b < 2; b++) { const p = pts[1 + Math.floor(Math.random() * (pts.length - 2))]; if (p) polyline(bolt(p[0], p[1], p[0] + rand(-70, 70) * w, p[1] + rand(20, 80) * w, 4, 10 * w)); }
+  ctx.restore();
+}
 // ── 액션 진행 ──
 function actStep(r, dt) {
   const A = r.act, P = A.P, dmg = ratDamage(r) * P, vis = onScreen(r.x, r.y);
   A.t += dt; A.hitT -= dt;
   const k = A.t / A.dur, drag = d => { const f = Math.max(0, 1 - d * dt); r.vx *= f; r.vy *= f; };
   switch (A.type) {
+    case 'thunder': {
+      // 람쥐썬더: 두 앞발을 하늘로 번쩍 → 부들부들 기 모으기 → 주변 물건에 번개가 연달아 꽂힘
+      drag(12);
+      const n = (4 + Math.floor(P)) * (A.x ? 2 : 1), k0 = 0.3, per = (0.92 - k0) / n;
+      if (k < k0) { r.jit = 1.5; if (vis && Math.random() < 0.5) particle({ x: r.x + rand(-14, 14), y: r.y, z: 40 + rand(0, 20), vx: rand(-40, 40), vy: 0, vz: rand(40, 120), life: 0.2, max: 0.2, size: 3, color: pick(['#bfe8ff', '#fff']), type: 'spark', drag: 0 }); }
+      else if (A.n < n && k >= k0 + A.n * per) {
+        A.n++; r.jit = 0.5;
+        const t = nearestItem(r, 420, it => !A.hits.has(it)) || null, x = t ? t.x : r.x + rand(-220, 220), y = t ? t.y : r.y + rand(-160, 160);
+        if (t) A.hits.set(t, 1);
+        strikeBolt(x, y, { w: 1 + 0.08 * P });
+        shock(x, y, 55 + 6 * P, dmg * 1.2, r, '#bfe8ff', 0.7);
+        if (t && t.state === 'rest') { damageItem(t, dmg * 3, r, true, Math.atan2(t.y - r.y, t.x - r.x)); if (A.x) zapChain(r, t, dmg * 1.5); }
+        if (vis) { flash('#dff4ff', 0.06); Sfx.laser(); if (A.n === 1 || Math.random() < 0.3) popup(x, y, pick(['찌릿!!', '콰릉!', '찌리찌리!']), '#bfe8ff', 18, 0.6, 50); }
+      }
+      if (!A.done && k >= 0.95) { A.done = true; r.jit = 0; if (vis) popup(r.x, r.y, '(뿌듯)', '#fff', 16, 0.8, 50); }
+      break;
+    }
     case 'gunkata': {
       // 빙글빙글 돌며 사방으로 탕탕탕
       drag(8);
@@ -175,8 +212,8 @@ function actStep(r, dt) {
     }
     case 'breath': {
       // 부채꼴로 휘두르는 브레스 (각성: 한 바퀴)
-      const range = 170 + 20 * P, base = r.face > 0 ? 0 : Math.PI, a = A.x ? base + k * Math.PI * 2 : base + Math.sin(A.t * 5) * 0.8;
-      A.aim = a; r.vx = r.vy = 0;
+      const range = 170 + 20 * P, base = A.base ??= (r.face > 0 ? 0 : Math.PI), a = A.x ? base + k * Math.PI * 2 : base + Math.sin(A.t * 5) * 0.8;
+      A.aim = a; r.vx = r.vy = 0; r.face = Math.cos(a) >= 0 ? 1 : -1;   // 입이 뿜는 쪽을 보게
       const water = r.sp.id === 'firefighter';
       if (A.hitT <= 0) {
         A.hitT = 0.1;
@@ -187,7 +224,8 @@ function actStep(r, dt) {
           if (d < range + it.r && Math.abs(da) < 0.45) damageItem(it, dmg * 0.8, r, false, Math.atan2(dy, dx));
         }, Math.ceil(range / CELL) + 1);
       }
-      if (vis) for (let i = 0; i < 5; i++) { const aa = a + rand(-0.4, 0.4), s = rand(0.4, 1) * range * 3; particle({ x: r.x, y: r.y, z: 16, vx: Math.cos(aa) * s, vy: Math.sin(aa) * s, vz: rand(10, 50), life: rand(0.25, 0.4), max: 0.4, size: rand(5, 11), color: pick(water ? ['#9fd3e6', '#bfe3ea', '#fff'] : ['#f0c878', '#e39a5a', '#d9786a', '#fff3bf']), type: 'spark', drag: 3 }); }
+      if (vis && !water) cheeseSpray(r, a, range, 5, 0.4);
+      else if (vis) for (let i = 0; i < 5; i++) { const aa = a + rand(-0.4, 0.4), s = rand(0.4, 1) * range * 3; particle({ x: r.x, y: r.y, z: 16, vx: Math.cos(aa) * s, vy: Math.sin(aa) * s, vz: rand(10, 50), life: rand(0.25, 0.4), max: 0.4, size: rand(5, 11), color: pick(water ? ['#9fd3e6', '#bfe3ea', '#fff'] : ['#f0c878', '#e39a5a', '#d9786a', '#fff3bf']), type: 'spark', drag: 3 }); }
       if (vis && Math.random() < 0.12) Sfx.boom(0.25);
       break;
     }
@@ -354,6 +392,10 @@ function updateActs(dt) {
     b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt;
     const [i, j] = roomOf(b.x, b.y);
     if (!isOpen(i, j)) { b.life = 0; continue; }
+    if (b.actors && b.life > 0) {                    // 필살기 총알(쥐커드)은 사람·보스·고양이도 맞힘
+      for (const h of G.humans) if (h.z < 90 && Math.hypot(h.x - b.x, h.y - b.y) < h.r + 6 && damageHuman(h, b.dmg * (h.boss ? 1 : 2), b.by, Math.atan2(b.vy, b.vx))) { b.life = 0; break; }
+      const c = G.cat; if (b.life > 0 && c && Math.hypot(c.x - b.x, c.y - b.y) < CAT_R + 6 && damageCat(c, b.dmg, Math.atan2(b.vy, b.vx), b.by)) b.life = 0;
+    }
     near(itemGrid, b.x, b.y, it => { if (b.life > 0 && it.state === 'rest' && Math.hypot(it.x - b.x, it.y - b.y) < it.r + 4) { b.life = 0; damageItem(it, b.dmg, b.by, false, Math.atan2(b.vy, b.vx)); if (onScreen(b.x, b.y)) burst(b.x, b.y, 3, { colors: ['#fff3bf', '#fff'], min: 80, max: 200, s0: 2, s1: 3, z: 14 }); } }, 0);
   }
   G.bullets = G.bullets.filter(b => b.life > 0);
@@ -385,7 +427,7 @@ function pickupAim(r) {
 // ── 그리기 ──
 // 소품 그리기: 총은 이모지(윈도우에선 초록 물총)가 아니라 직접 그린 권총, 나머지는 이모지
 function drawProp(g, icon, size) {
-  const im = IMG['art_' + icon];                 // Codex 이미지가 있으면 그걸로
+  const im = icon.startsWith('fr:') ? (typeof FR_IMG !== 'undefined' && FR_IMG[icon.slice(3)]) : IMG['art_' + icon];   // Codex 이미지가 있으면 그걸로 ('fr:' = 필살기 앞모습 파츠 이미지)
   if (im) { const k = size * 1.35 / Math.max(im.width, im.height); g.drawImage(im, -im.width * k / 2, -im.height * k / 2, im.width * k, im.height * k); return; }
   if (icon === '🔫') {
     const s = size / 16;
@@ -408,6 +450,7 @@ function drawPickup(p) {
 }
 function drawActFx() {
   ctx.lineCap = 'round';
+  if (G.zaps) { for (const z of G.zaps) { z.life -= 1 / 60; if (onScreen(z.x, z.y, 200)) drawSkyBolt(z); } G.zaps = G.zaps.filter(z => z.life > 0); }
   for (const b of G.bullets) { if (!onScreen(b.x, b.y)) continue; const L = 0.02; ctx.strokeStyle = '#fff3bf'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(b.x, b.y * TILT - 14); ctx.lineTo(b.x - b.vx * L, (b.y - b.vy * L) * TILT - 14); ctx.stroke(); }
   for (const s of G.slashes) { const k = s.life / s.max; ctx.globalAlpha = k; ctx.strokeStyle = '#fff'; ctx.lineWidth = 12 * k + 1; ctx.beginPath(); ctx.moveTo(s.x1, s.y1 * TILT - 12); ctx.lineTo(s.x2, s.y2 * TILT - 12); ctx.stroke(); ctx.strokeStyle = s.col || '#a9d3dc'; ctx.lineWidth = 4 * k; ctx.stroke(); }
   ctx.globalAlpha = 1;
@@ -424,6 +467,7 @@ function actPose(r, p) {
   const A = r.act, t = G.t, k = A.t / A.dur;
   const up = { tilt: -0.6, back: -0.25, farBack: 0.25 };        // 뒷발로 일어섬
   switch (A.type) {
+    case 'thunder': Object.assign(p, up, { front: 2.95 + Math.sin(t * 50) * 0.05, farFront: 2.8 + Math.cos(t * 50) * 0.05, head: -0.55, tail: 1.4 + Math.sin(t * 20) * 0.1 }); break;
     case 'gunkata': Object.assign(p, up, { front: 1.7 + Math.sin(t * 40) * 0.25, farFront: 1.5 - Math.sin(t * 40) * 0.25, head: -0.2, tail: 0.8 + Math.sin(t * 30) * 0.3 }); break;
     case 'slam': { const air = r.z > 10; Object.assign(p, air ? { front: 2.7, farFront: 2.5, back: -1.2, farBack: -1, tail: 1.2, head: -0.3 } : { front: 0.3, farFront: 0.2, back: -0.3, farBack: -0.2, head: 0.35, sy: 0.85, sx: 1.12 }); break; }
     case 'slash': Object.assign(p, { front: 1.8, farFront: 1.2, back: -1.4, farBack: -1.2, head: -0.2, tail: -0.6, sx: 1.12, sy: 0.92 }); break;

@@ -7,7 +7,7 @@
 //   node gen_parts.mjs --print brownrat    프롬프트만 출력
 // 생성 후: node slice_parts.mjs  (파츠 자르기 + 관절 분석 → 게임/유니티 폴더)
 import { spawn } from 'node:child_process';
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +28,7 @@ const BODY = {
   rat: { tail: 'a LONG thin tapering pink rat tail, gently S-curved, drawn horizontally', legs: 'short and slender', head: 'long pointed snout, big round ear, small black eye, pink nose, a few whiskers' },
   mouse: { tail: 'a long thin tapering pink mouse tail, gently curved, drawn horizontally', legs: 'short and slender', head: 'short pointed snout, very big round ear, round black eye, pink nose, whiskers' },
   hamster: { tail: 'a TINY short stubby fluffy tail nub (very small)', legs: 'very short and stubby', head: 'round chubby face with puffy cheek pouches, small round ear, black eye, pink nose' },
+  squirrel: { tail: 'a HUGE fluffy bushy squirrel tail, as big as the body, curling UP in an S shape (the root on the left is a clean cut)', legs: 'short front legs with little hands, strong hind legs with long feet', head: 'short cute snout, small tufted pointy ears, big round shiny black eye, small nose, whiskers' },
   gerbil: { tail: 'a long furry tail with a small tuft at the tip, drawn horizontally', legs: 'short front legs, long hind feet', head: 'short snout, round ear, big black eye, pink nose, whiskers' },
 };
 
@@ -50,9 +51,21 @@ export function promptFor(sp) {
   ].join('\n');
 }
 
-export function codex(prompt) {
+// codex 가 PATH 에 없으면 데스크톱 앱이 설치한 최신 codex.exe 를 찾아 씀 (환경변수 CODEX 로 지정 가능)
+function codexBin() {
+  if (process.env.CODEX) return `"${process.env.CODEX}"`;
+  const base = path.join(process.env.LOCALAPPDATA || '', 'OpenAI', 'Codex', 'bin');
+  try {
+    const exe = readdirSync(base).map(d => path.join(base, d, 'codex.exe')).filter(existsSync).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+    if (exe) return `"${exe}"`;
+  } catch { /* 없음 → PATH 의 codex */ }
+  return 'codex';
+}
+// images = 프롬프트에 첨부할 참고 이미지 경로들 (그림체 맞추기용)
+export function codex(prompt, images = []) {
   return new Promise((resolve) => {
-    const p = spawn(`codex exec --skip-git-repo-check -s workspace-write -C "${ROOT}" -`, { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const att = images.map(f => ` -i "${f}"`).join('');
+    const p = spawn(`${codexBin()} exec --skip-git-repo-check -s workspace-write -C "${ROOT}" -${att}`, { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', d => { out += d; });
     p.stderr.on('data', d => { out += d; });
@@ -63,7 +76,7 @@ export function codex(prompt) {
 
 async function generate(sp) { return codexImage(promptFor(sp), path.join(SHEETS, `${sp.id}.png`), sp.id); }
 // Codex 내장 image_gen 으로 한 장 만들어 dst 에 저장. 사용량 한도면 e.stop 인 에러
-export async function codexImage(spec, dst, label) {
+export async function codexImage(spec, dst, label, images = []) {
   const prompt = [
     'Use the imagegen skill with the built-in image_gen tool (do NOT use any CLI/API fallback script).',
     'Generate exactly ONE image with this spec:',
@@ -73,7 +86,7 @@ export async function codexImage(spec, dst, label) {
     'If the image_gen tool is unavailable, reply exactly IMAGE_GEN_UNAVAILABLE and stop.',
   ].join('\n\n');
   const t0 = Date.now();
-  const { out } = await codex(prompt);
+  const { out } = await codex(prompt, images);
   if (existsSync(dst)) { console.log(`  ✓ ${label} (${Math.round((Date.now() - t0) / 1000)}s)`); return true; }
   if (/usage.limit|rate.limit/i.test(out)) { const e = new Error('사용량 한도 도달: ' + (out.match(/try again[^\n]*/i) || [''])[0]); e.stop = true; throw e; }
   console.log(`  ✗ ${label} 실패\n${out.slice(-800)}`);

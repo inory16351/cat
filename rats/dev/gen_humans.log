@@ -1,0 +1,6 @@
+생성할 사람 시트 2장 (한 장에 3명, 동시 2장)
+  ✓ human/sheet_boss_chief+boss_mad+boss_director (78s)
+  ✓ human/sheet_researcher+guard+janitor (95s)
+  ✂ sheet_researcher+guard+janitor
+  ✂ sheet_boss_chief+boss_mad+boss_director
+사람 파츠: 6명

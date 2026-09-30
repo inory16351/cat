@@ -6,7 +6,7 @@
 <title>쥐들의 반란</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=74">
 </head>
 <body>
 <div id="wrap">
@@ -23,8 +23,14 @@
       <div class="bar"><i id="rampBar"></i></div>
       <div class="lvl-sub" id="rampSub"></div>
     </div>
+    <div class="hud-pow" title="전투력 = 무리 전체의 갉는 힘. 눈금(이 층 적정 찍찍!!)을 넘으면 계단 벽을 무난하게 뚫어요">
+      <div class="pow-line">⚔️ <b id="pow">0</b> <small>찍찍!!</small><em id="powGain"></em></div>
+      <div class="bar pow-bar"><i id="powBar"></i><s></s></div>
+      <div class="lvl-sub" id="powSub"></div>
+    </div>
     <div class="hud-cats">
       <div>🐀 <b id="popN">3/30</b></div>
+      <div class="sub full-sub" id="popSub"></div>
       <div class="sub">도감 <span id="dexN">3/54</span></div>
     </div>
   </div>
@@ -34,12 +40,16 @@
     <button id="btnSkills" class="dock-btn">🌳<span>스킬</span><em id="skBadge" class="badge hidden">0</em></button>
     <button id="btnPromo" class="dock-btn">⬆️<span>승급</span><em id="prBadge" class="badge hidden">!</em></button>
     <button id="btnDex" class="dock-btn">📖<span>도감</span><em id="dexBadge" class="badge hidden">N</em></button>
-    <button id="btnUlt" class="dock-btn" title="필살기 강제 발동 (테스트용, 누를 때마다 다음 종)">🎬<span>필살기</span></button>
+    <button id="btnStats" class="dock-btn">📊<span>스탯</span></button>
+    <button id="btnCat" class="dock-btn" title="고양이 강제 소환 (테스트용, 누를 때마다 다음 품종)">🐈<span>고양이</span></button>
+    <button id="btnBoss" class="dock-btn" title="보스 강제 소환 (테스트용, 누를 때마다 다음 보스)">👹<span>보스</span></button>
+    <button id="btnUlt" class="dock-btn" title="필살기 골라서 발동 (테스트용)">🎬<span>필살기</span></button>
     <button id="btnSJ" class="dock-btn" title="슈퍼 점프 강제 발동 (테스트용)">🚀<span>슈퍼점프</span></button>
     <button id="btnMute" class="dock-btn small">🔊</button>
     <button id="btnReset2" class="dock-btn small" title="초기화">🗑️</button>
   </div>
-  <div id="hint" class="hint hidden">🐀 쥐들은 알아서 뛰어다니며 부수고, 서로 부딪히면 번식해요 · 클릭하면 총공격! (돌진 중엔 번식 안 함) · 종마다 특수 능력이 달라요 — 🌳 스킬에서 키워보세요</div>
+  <button id="btnClimb" class="big climb hidden">👹 보스 재도전!</button>
+  <div id="hint" class="hint hidden">🐀 계단 방 벽을 부수고 위층으로 탈출! · 클릭하면 총공격 (보스·고양이에게 특히 효과적) · 같은 쥐를 또 얻으면 ⭐조각으로 자동 강화</div>
   <div id="toasts"></div>
 
   <!-- 신종 탄생 -->
@@ -69,8 +79,8 @@
       <img id="titleArt" src="../assets/rats/title.png" alt="" onerror="this.style.display='none'">
       <div class="start-side">
         <h1>쥐들의 <span>반란</span></h1>
-        <div class="mode">비밀 연구실 탈출기</div>
-        <p>실험실 쥐 <b>세 마리</b>가 탈출을 꿈꾼다.<br>부딪히면 번식, 부수면 치즈.<br>벽을 뚫고 인간 세상을 정복하라!</p>
+        <div class="mode">연구소 탈출기</div>
+        <p>지하 실험실의 쥐 <b>세 마리</b>가 탈출을 꿈꾼다.<br>부딪히면 번식, 부수면 치즈, 연구원은 날려버려라.<br>계단을 찾아 한 층씩, 옥상까지 올라가라!</p>
         <button id="btnStart" class="big">반란 시작!</button>
         <button id="btnReset" class="mini reset-btn">🗑️ 초기화</button>
       </div>
@@ -117,10 +127,31 @@
     <div class="panel-head">
       <h2>⬆️ 승급 의식</h2>
       <div class="dex-sum">같은 등급 10마리를 희생 → 윗등급 쥐 1마리 (무작위)</div>
+      <button id="btnPromoAll" class="big promo-all">⏫ 일괄 승급</button>
       <button class="close">✕</button>
     </div>
     <div id="odds" class="odds"></div>
     <div id="prList" class="list promo-list"></div>
+  </div>
+
+  <!-- 필살기 테스트: 골라서 발동 -->
+  <div id="ultPick" class="screen hidden">
+    <div class="panel-head">
+      <h2>🎬 필살기 테스트</h2>
+      <div class="dex-sum">누르면 바로 발동 (그 종이 화면에 없으면 15초 동안 불러옴)</div>
+      <button class="close">✕</button>
+    </div>
+    <div id="ultList" class="ult-list"></div>
+  </div>
+
+  <!-- 스탯 -->
+  <div id="stats" class="screen hidden">
+    <div class="panel-head">
+      <h2>📊 스탯</h2>
+      <div class="dex-sum">지금 능력치 · 찍은 스킬의 현재(만렙) 효과</div>
+      <button class="close">✕</button>
+    </div>
+    <div id="statsBody" class="stats-body"></div>
   </div>
 
   <!-- 도감 -->
@@ -137,21 +168,31 @@
   </div>
 </div>
 
-<script src="../js/audio.js?v=32"></script>
-<script src="../js/draw.js?v=32"></script>
-<script src="../idle/js/data.js?v=32"></script>
-<script src="../idle/js/citydraw.js?v=32"></script>
-<script src="js/data.js?v=32"></script>
-<script src="js/labdraw.js?v=32"></script>
-<script src="js/rodent.js?v=32"></script>
-<script src="js/parts_meta.js?v=32"></script>
-<script src="js/art_manifest.js?v=32"></script>
-<script src="js/ratrig.js?v=32"></script>
-<script src="js/game.js?v=32"></script>
-<script src="js/superjump.js?v=32"></script>
-<script src="js/acts.js?v=32"></script>
-<script src="js/ults.js?v=32"></script>
-<script src="js/ui.js?v=32"></script>
+<script src="../js/audio.js?v=74"></script>
+<script src="../js/draw.js?v=74"></script>
+<script src="../idle/js/data.js?v=74"></script>
+<script src="../idle/js/citydraw.js?v=74"></script>
+<script src="js/data.js?v=74"></script>
+<script src="js/labdraw.js?v=74"></script>
+<script src="js/rodent.js?v=74"></script>
+<script src="js/parts_meta.js?v=74"></script>
+<script src="js/art_manifest.js?v=74"></script>
+<script src="js/ratrig.js?v=74"></script>
+<script src="js/front_meta.js?v=74"></script>
+<script src="js/frontrig.js?v=74"></script>
+<script src="js/jwrig.js?v=74"></script>
+<script src="js/human_meta.js?v=74"></script>
+<script src="js/mount_meta.js?v=74"></script>
+<script src="../assets/v2/parts/parts_meta.js?v=74"></script>
+<script src="js/game.js?v=74"></script>
+<script src="js/stage.js?v=74"></script>
+<script src="js/humans.js?v=74"></script>
+<script src="js/hazards.js?v=74"></script>
+<script src="js/superjump.js?v=74"></script>
+<script src="js/acts.js?v=74"></script>
+<script src="js/ults.js?v=74"></script>
+<script src="js/ults_parody.js?v=74"></script>
+<script src="js/ui.js?v=74"></script>
 <script>
   loadSave();
   const fit = () => {

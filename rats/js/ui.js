@@ -7,7 +7,7 @@ const UI = (() => {
   // 쥐 그림 (이미지가 있으면 이미지, 없으면 코드 그림). 모르는 종은 실루엣
   function ratPic(sp, w = 160, h = 120, known = true) {
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    const c = cv.getContext('2d'), img = IMG['rat_' + sp.id];
+    const c = cv.getContext('2d'), img = IMG['rat_' + sp.id] || IMG['art_r:' + sp.id];
     c.save();
     const rig = RAT_RIGS[sp.id];
     if (rig) { const s = Math.min(w / 72, h / 50) * (RIG_LEN.rat / (RIG_LEN[sp.shape] || 44)) ** 0.5; c.translate(w / 2 - 2 * s, h * 0.86); c.scale(s, s); drawRatRig(rig, 1, { ...RIG_IDLE }, c); }
@@ -18,11 +18,14 @@ const UI = (() => {
     return cv;
   }
   const tierCol = t => TIERS[t].col;
+  // 설명 "A → B" 에서 다음 레벨 값(→ B)을 지워 지금 효과만 남김
+  const curEffect = d => d.replace(/\s*→\s*[^\s,()]+/g, '');
 
   function show(id) { $(id).classList.remove('hidden'); }
   function hide(id) { $(id).classList.add('hidden'); }
 
   // ── HUD ──
+  let powGainN = 0;
   function hud() {
     $('cheese').textContent = fmt(S.cheese);
     $('ips').textContent = fmt(S.ips);
@@ -31,9 +34,25 @@ const UI = (() => {
     const w = tierWeights(), sum = w.reduce((a, b) => a + b, 0);
     const hi = TIERS.map((t, i) => [t, w[i] / sum]).filter(([, p], i) => i >= 1 && p >= 0.001).map(([t, p]) => `${t.name} ${oddsPct(p)}`).join(' · ');
     $('rampSub').textContent = `탄생 확률 · ${hi}`;
-    const ww = weakestWall();
-    $('zone').textContent = `방 ${OPEN.size}개` + (ww ? ` · 가장 약한 벽 🧱${fmt(Math.max(0, ww.hp))} (→ ${ww.zone.name})` : '');
-    $('popN').textContent = `${G.rats.length}/${popCap()}`;
+    // ⚔️ 전투력 게이지: 눈금(75% 지점) = 이 층 적정 찍찍!! → 넘으면 초록
+    if (G.power !== undefined) {
+      const need = powNeed(S.floor), k = G.power / need;
+      $('pow').textContent = fmt(G.power);
+      $('powBar').style.width = Math.min(100, k * 75).toFixed(1) + '%';
+      $('powBar').className = k >= 1 ? 'ok' : k >= 0.5 ? 'mid' : 'low';
+      $('powSub').textContent = `${isBossFloor(S.floor) ? '👹' : '🪜'} ${S.floor}층 적정 ${fmt(need)} · ${k >= 1 ? '충분!' : Math.floor(k * 100) + '%'}`;
+      const g = G.powGain;
+      if (g && g.n !== powGainN) { powGainN = g.n; const e = $('powGain'); e.textContent = `+${fmt(g.v)}`; e.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); $('pow').classList.remove('pop'); void $('pow').offsetWidth; $('pow').classList.add('pop'); }
+    }
+
+    // 계단 방은 열리기 전엔 어디인지 알려주지 않음 (벽 체력도 안 보여줌)
+    const stairsTxt = isOpen(...STAIRS) ? (G.bossFight ? '👹 보스를 쓰러뜨려라!' : '🪜 계단으로!') : `방 ${OPEN.size}/${LAYOUT.size} · 계단 방을 찾아라`;
+    $('zone').textContent = `🏢 ${S.floor}층 ${zoneOf().name} · ${stairsTxt}`;
+    const ask = G.climbAsk && !G.trans; $('btnClimb').classList.toggle('hidden', !ask);
+    if (ask) $('btnClimb').textContent = `👹 ${S.floor + 1}층 보스 재도전!`;
+    const pn = ratCount(), full = pn >= popCap();
+    $('popN').textContent = `${pn}/${popCap()}`; $('popN').classList.toggle('full', full);
+    $('popSub').textContent = full ? '가득! 승급·둥지로 늘리기' : '';
     $('dexN').textContent = `${Object.keys(S.seen).length}/${RSPECIES.length}`;
     document.querySelectorAll('.cheese-live').forEach(e => (e.textContent = fmt(S.cheese)));
     const na = affordableCount(); $('skBadge').classList.toggle('hidden', !na); $('skBadge').textContent = na;
@@ -41,16 +60,16 @@ const UI = (() => {
     const nf = Object.keys(S.fresh).length;
     $('dexBadge').classList.toggle('hidden', !nf); $('dexBadge').textContent = nf;
   }
-  const canPromote = t => t < TIERS.length - 1 && G.rats.filter(r => r.tier === t).length >= PROMOTE_COST && G.rats.length > PROMOTE_COST;
+  const canPromote = t => t < TIERS.length - 1 && G.rats.filter(r => r.tier === t && !r.temp).length >= PROMOTE_COST && ratCount() > PROMOTE_COST;
 
   // ── 스킬 트리 (공용 / 종별) ──
-  let treeMode = 'common', selSkill = 'teeth', amt = 1;
+  let treeMode = 'common', selSkill = 'core', amt = 1;
   const picCache = {};
   function picURL(sp) { return picCache[sp.id] || (picCache[sp.id] = ratPic(sp, 96, 72).toDataURL()); }
   function treeCtx(mode = treeMode) {
     if (mode === 'common') return {
       list: RSKILLS, get: s => lv(s.id), set: (s, v) => { S.skills[s.id] = v; }, cost: (s, l) => skillCost(s, l),
-      pos: s => [7 + s.grid[0] * 17.2, 88 - s.grid[1] * 19], name: s => s.name, icon: s => s.icon, desc: (s, l) => s.desc(l),
+      pos: s => [7 + s.grid[0] * 17.2, 88 - s.grid[1] * 19], name: s => s.name, icon: s => s.icon, desc: (s, l) => s.desc(l), cur: (s, l) => curEffect(s.desc(l)),
       reqOk: s => !s.req || lv(s.req[0]) >= s.req[1], reqName: s => RSKILL_BY_ID[s.req[0]].name,
     };
     const sp = RSPECIES_BY_ID[mode];
@@ -58,6 +77,7 @@ const UI = (() => {
       list: RAT_TREE, get: s => rsl(sp.id, s.id), set: (s, v) => { (S.rsk[sp.id] = S.rsk[sp.id] || {})[s.id] = v; }, cost: (s, l) => ratSkillCost(s, sp.id, l),
       pos: s => [31 + s.grid[0] * 19.5, 86 - s.grid[1] * 24], name: s => nodeName(sp, s), icon: s => (s.special ? sp.ab.icon : s.act === 'act' ? sp.act.icon : s.icon),
       desc: (s, l) => (s.special ? `${abDesc(sp, l)} → ${abDesc(sp, l + 1)}` : s.act ? actNodeDesc(sp, s, l) : s.desc(l)), reqOk: s => !s.req || rsl(sp.id, s.req[0]) >= s.req[1],
+      cur: (s, l) => (s.special ? abDesc(sp, l) : s.act === 'act' ? actDesc(sp, l, rsl(sp.id, 'actPow')) : s.act === 'pow' ? `${sp.act.name} 위력 ×${actPower(sp, l, rsl(sp.id, 'ult')).toFixed(1)}` : s.act === 'x' ? `각성: ${ACT_TYPES[sp.act.type].x}` : curEffect(s.desc(l))),
       reqName: s => nodeName(sp, RAT_TREE_BY_ID[s.req[0]]),
     };
   }
@@ -79,7 +99,7 @@ const UI = (() => {
   const herdIds = () => [...new Set(G.rats.map(r => r.sp.id))];
   function affordableCount() {
     let n = 0;
-    for (const mode of ['common', ...herdIds()]) { const T = treeCtx(mode); for (const s of T.list) if (T.reqOk(s) && !isMax(T, s) && S.cheese >= T.cost(s, T.get(s))) n++; }
+    for (const mode of ['common']) { const T = treeCtx(mode); for (const s of T.list) if (T.reqOk(s) && !isMax(T, s) && S.cheese >= T.cost(s, T.get(s))) n++; }
     return n;
   }
   function buyCount(T, s) {
@@ -95,19 +115,67 @@ const UI = (() => {
     const list = RSPECIES.filter(s => S.seen[s.id]).sort((a, b) => (inHerd.has(b.id) - inHerd.has(a.id)) || b.tier - a.tier);
     $('treeTabs').innerHTML = `<button class="tab ${treeMode === 'common' ? 'on' : ''}" data-m="common">🌍 공용</button>` +
       list.map(s => `<button class="tab cat ${treeMode === s.id ? 'on' : ''} ${inHerd.has(s.id) ? '' : 'away'}" data-m="${s.id}" title="${s.name}" style="--rc:${TIERS[s.tier].col}"><img src="${picURL(s)}"><span>${s.name}</span></button>`).join('');
-    for (const b of document.querySelectorAll('#treeTabs .tab')) b.onclick = () => { treeMode = b.dataset.m; selSkill = treeMode === 'common' ? 'teeth' : 'dmg'; Sfx.click(); buildTree(); };
+    for (const b of document.querySelectorAll('#treeTabs .tab')) b.onclick = () => { treeMode = b.dataset.m; selSkill = treeMode === 'common' ? 'core' : 'dmg'; Sfx.click(); buildTree(); };
     const on = document.querySelector('#treeTabs .tab.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  // ── 공용 트리: 방사형 지도 (빌즈 머스트 비 페이드 방식) ──
+  // 가운데 '반란의 시작'에서 사방으로. 찍을 수 있는 노드 + 그 바로 옆 '?' 만 보이고 나머지는 숨김. 드래그로 둘러보기, 휠로 확대
+  const MAP_STEP = 96, MAP_R = 6;
+  const BR_COL = { core: '#f0c878', gnaw: '#d9786a', pack: '#8fc98b', loot: '#e6c35a', trick: '#b59ad6', escape: '#8fb3d7', special: '#f09a5a' };
+  let mapPan = null, mapZoom = 1, mapDrag = null, mapMoved = false;
+  function mapState(s) {
+    if (lv(s.id) > 0) return 'own';
+    if (!s.req || lv(s.req[0]) >= s.req[1]) return 'open';
+    const p = RSKILL_BY_ID[s.req[0]];
+    return lv(p.id) > 0 || !p.req || lv(p.req[0]) >= p.req[1] ? 'hint' : 'hide';
+  }
+  function applyPan(inner) { inner.style.transform = `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapZoom})`; }
+  function buildMap(T, host) {
+    const W = (MAP_R * 2 + 1) * MAP_STEP, C = W / 2, at = s => [C + s.pos[0] * MAP_STEP, C + s.pos[1] * MAP_STEP];
+    host.innerHTML = `<div class="tmap"><div class="tmap-in" style="width:${W}px;height:${W}px"></div><div class="tmap-hint">드래그로 둘러보기 · 휠로 확대 · 찍으면 옆 노드가 드러나요</div></div>`;
+    const view = host.firstChild, inner = view.firstChild;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', W); svg.setAttribute('height', W); svg.classList.add('mlinks');
+    for (const s of T.list) {
+      if (!s.req) continue;
+      const p = RSKILL_BY_ID[s.req[0]], st = mapState(s), ps = mapState(p);
+      if (st === 'hide' || ps === 'hide') continue;
+      const [x1, y1] = at(p), [x2, y2] = at(s), l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      Object.entries({ x1, y1, x2, y2 }).forEach(([k, v]) => l.setAttribute(k, v));
+      l.setAttribute('class', st === 'own' ? 'on' : st === 'open' ? 'open' : 'off'); l.style.setProperty('--bc', BR_COL[s.br] || '#fff');
+      svg.appendChild(l);
+    }
+    inner.appendChild(svg);
+    for (const s of T.list) {
+      const st = mapState(s); if (st === 'hide') continue;
+      const b = document.createElement('button'), l = T.get(s), [x, y] = at(s);
+      b.className = `node mnode ${st}${s.key ? ' key' : ''}${isMax(T, s) ? ' maxed' : ''}${s.id === selSkill ? ' sel' : ''}`;
+      b.dataset.id = s.id; b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.setProperty('--bc', BR_COL[s.br] || '#fff');
+      b.innerHTML = st === 'hint' ? '<span class="ic">?</span>'
+        : `<span class="ic">${T.icon(s)}</span><span class="lv">${l}${s.max ? '/' + s.max : ''}</span><span class="nm">${T.name(s)}</span>` + (!isMax(T, s) ? `<span class="cost">🧀${fmt(T.cost(s, l))}</span>` : '');
+      b.onclick = () => { if (mapMoved) return; Sfx.resume(); if (st === 'hint') { selSkill = s.id; Sfx.click(); buildTree(); return; } if (selSkill === s.id) buy(); else { selSkill = s.id; Sfx.click(); buildTree(); } };
+      inner.appendChild(b);
+    }
+    // 처음 열면 가운데(반란의 시작)가 화면 가운데
+    const vw = host.clientWidth || 800, vh = host.clientHeight || 500;
+    if (!mapPan) mapPan = { x: vw / 2 - C * mapZoom, y: vh / 2 - C * mapZoom };
+    applyPan(inner);
+    view.onpointerdown = e => { mapDrag = { x: e.clientX, y: e.clientY, px: mapPan.x, py: mapPan.y }; mapMoved = false; view.setPointerCapture(e.pointerId); view.classList.add('drag'); };
+    view.onpointermove = e => { if (!mapDrag) return; const dx = e.clientX - mapDrag.x, dy = e.clientY - mapDrag.y; if (Math.abs(dx) + Math.abs(dy) > 6) mapMoved = true; mapPan.x = mapDrag.px + dx; mapPan.y = mapDrag.py + dy; applyPan(inner); };
+    view.onpointerup = view.onpointercancel = () => { mapDrag = null; view.classList.remove('drag'); setTimeout(() => { mapMoved = false; }, 0); };
+    view.onwheel = e => { e.preventDefault(); const r = view.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, z0 = mapZoom; mapZoom = clamp(mapZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), 0.5, 1.5); mapPan.x = mx - (mx - mapPan.x) * mapZoom / z0; mapPan.y = my - (my - mapPan.y) * mapZoom / z0; applyPan(inner); };
   }
   function buildTree() {
     buildTabs();
     const T = treeCtx(), host = $('treeArea');
+    if (treeMode === 'common') { buildMap(T, host); renderSkillDetail(); refreshTreeAfford(); return; }
     host.innerHTML = '<div class="tree-inner"></div>';
     const area = host.firstChild;
     if (treeMode !== 'common') {
-      const sp = RSPECIES_BY_ID[treeMode], t = TIERS[sp.tier], n = G.rats.filter(r => r.sp.id === sp.id).length;
+      const sp = RSPECIES_BY_ID[treeMode], t = TIERS[sp.tier], n = G.rats.filter(r => r.sp.id === sp.id).length, sh = shardLevel(sp.id);
       const box = document.createElement('div'); box.className = 'tree-cat';
       box.appendChild(ratPic(sp, 200, 150));
-      box.insertAdjacentHTML('beforeend', `<b>${sp.name}</b><small><span class="rar" style="background:${t.col}">${t.name}</span> 무리에 ${n}마리 · 비용 ×${t.cost}</small><div class="ab-card">${sp.ab.icon} <b>${sp.ab.name}</b><small>${abDesc(sp, rsl(sp.id, 'special'))}</small></div>${sp.ult ? `<div class="ab-card ult">${sp.ult.fx} <b>필살기 · ${sp.ult.name}</b><small>가끔 컷씬과 함께 발동: ${ULT_TYPES[sp.ult.type]}</small></div>` : ''}<div class="ab-card act">${sp.act.icon} <b>${sp.act.name}</b><small>${rsl(sp.id, 'act') ? actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '🔒 트리에서 해금 · ' + actDesc(sp, 1, 0)}</small></div>`);
+      box.insertAdjacentHTML('beforeend', `<b>${sp.name}</b><small><span class="rar" style="background:${t.col}">${t.name}</span> 무리에 ${n}마리</small><div class="shard"><b>⭐ 조각 강화 Lv ${sh.L}</b><div class="bar"><i style="width:${sh.need ? (sh.have / sh.need * 100).toFixed(1) : 100}%"></i></div><small>${sh.need ? `조각 ${sh.have}/${sh.need} · 같은 쥐가 태어나거나 승급으로 얻으면 +1` : '최대 레벨!'}</small></div><div class="ab-card">${sp.ab.icon} <b>${sp.ab.name}</b><small>${abDesc(sp, rsl(sp.id, 'special'))}</small></div>${sp.ult ? `<div class="ab-card ult">${sp.ult.fx} <b>필살기 · ${sp.ult.name}</b><small>가끔 컷씬과 함께 발동: ${ULT_TYPES[sp.ult.type]}</small></div>` : ''}<div class="ab-card act">${sp.act.icon} <b>${sp.act.name}</b><small>${rsl(sp.id, 'act') ? actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '🔒 조각 강화로 해금 · ' + actDesc(sp, 1, 0)}</small></div>`);
       host.prepend(box);
     }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -126,7 +194,8 @@ const UI = (() => {
       b.className = 'node' + (ok ? '' : ' locked') + (isMax(T, s) ? ' maxed' : '') + (s.id === selSkill ? ' sel' : '') + (s.special ? ' special' : '');
       b.dataset.id = s.id;
       const [px, py] = T.pos(s); b.style.left = px + '%'; b.style.top = py + '%';
-      b.innerHTML = `<span class="nm">${T.name(s)}</span><span class="ic">${ok ? T.icon(s) : '🔒'}</span><span class="lv">${l}${s.max ? '/' + s.max : ''}</span>` + (ok && !isMax(T, s) ? `<span class="cost">🧀${fmt(T.cost(s, l))}</span>` : '');
+      b.innerHTML = `<span class="nm">${T.name(s)}</span><span class="ic">${ok ? T.icon(s) : '🔒'}</span><span class="lv">${l}${s.max ? '/' + s.max : ''}</span>` + (ok && !isMax(T, s) && treeMode === 'common' ? `<span class="cost">🧀${fmt(T.cost(s, l))}</span>` : '');
+      if (treeMode !== 'common' && !l) b.classList.add('dim');
       b.onclick = () => { Sfx.resume(); if (selSkill === s.id) buy(); else { selSkill = s.id; Sfx.click(); buildTree(); } };
       area.appendChild(b);
     }
@@ -134,16 +203,25 @@ const UI = (() => {
   }
   function refreshTreeAfford() {
     const T = treeCtx();
-    for (const b of document.querySelectorAll('#treeArea .node')) { const s = T.list.find(o => o.id === b.dataset.id); if (s) b.classList.toggle('afford', T.reqOk(s) && !isMax(T, s) && S.cheese >= T.cost(s, T.get(s))); }
+    for (const b of document.querySelectorAll('#treeArea .node')) { const s = T.list.find(o => o.id === b.dataset.id); if (s) b.classList.toggle('afford', treeMode === 'common' && T.reqOk(s) && !isMax(T, s) && S.cheese >= T.cost(s, T.get(s))); }
     renderSkillDetail(true);
   }
   function renderSkillDetail(onlyButton) {
     const T = treeCtx(), s = T.list.find(o => o.id === selSkill) || T.list[0], btn = $('dBuy');
+    if (treeMode === 'common' && mapState(s) === 'hint') {
+      if (!onlyButton) { $('dIcon').textContent = '❓'; $('dName').textContent = '???'; $('dLv').textContent = ''; $('dDesc').textContent = `아직 모르는 스킬.\n${RSKILL_BY_ID[s.req[0]].name}을(를) Lv${s.req[1]} 까지 찍으면 드러나요.`; }
+      btn.textContent = `🔒 ${RSKILL_BY_ID[s.req[0]].name} Lv${s.req[1]} 필요`; btn.disabled = true; return;
+    }
     if (!onlyButton) {
       $('dIcon').textContent = T.icon(s); $('dName').textContent = T.name(s);
       $('dLv').textContent = `Lv ${T.get(s)}${s.max ? ' / ' + s.max : ' (무한)'}`;
-      $('dDesc').textContent = isMax(T, s) ? '최대 레벨 달성!' : T.desc(s, T.get(s));
+      // 찍은 스킬은 지금 효과를, 만렙이면 만렙 효과를 보여줌
+      const l = T.get(s); $('dDesc').style.whiteSpace = 'pre-line';
+      $('dDesc').textContent = isMax(T, s) ? `✨ 최대 레벨 달성!\n\n현재 효과: ${T.cur(s, l)}` : l ? `현재 효과: ${T.cur(s, l)}\n\n다음 레벨: ${T.desc(s, l)}` : T.desc(s, l);
     }
+    document.querySelector('.amt').classList.toggle('hidden', treeMode !== 'common');
+    document.querySelector('.d-tip').classList.toggle('hidden', treeMode !== 'common');
+    if (treeMode !== 'common') { btn.textContent = T.get(s) ? `✅ 찍힘 Lv ${T.get(s)}` : '⭐ 조각을 모으면 자동으로 찍혀요'; btn.disabled = true; return; }
     if (!T.reqOk(s)) { btn.textContent = `🔒 ${T.reqName(s)} Lv${s.req[1]} 필요`; btn.disabled = true; return; }
     if (isMax(T, s)) { btn.textContent = '✨ MAX'; btn.disabled = true; return; }
     const { n, cost } = buyCount(T, s);
@@ -151,6 +229,7 @@ const UI = (() => {
     btn.disabled = !n || S.cheese < cost;
   }
   function buy() {
+    if (treeMode !== 'common') { Sfx.deny(); return; }            // 종별 트리는 조각으로 자동 (보기 전용)
     const T = treeCtx(), s = T.list.find(o => o.id === selSkill), { n, cost } = buyCount(T, s);
     if (!n || S.cheese < cost) { Sfx.deny(); return; }
     S.cheese -= cost; T.set(s, T.get(s) + n); Sfx.buy(); writeSave(); buildTree(); hud();
@@ -168,6 +247,34 @@ const UI = (() => {
     }
   }
   function openTree(mode) { treeMode = mode; selSkill = mode === 'common' ? 'teeth' : 'dmg'; hide('dex'); hide('promo'); openPanel('tree', buildTree); }
+
+  // ── 스탯 ── (지금 능력치 + 찍은 공용 스킬의 현재/만렙 효과 + 조각 강화 상위 종)
+  function renderStats() {
+    const row = (k, v) => `<div class="st-row"><span>${k}</span><b>${v}</b></div>`;
+    const tiers = TIERS.map((t, i) => [t, G.rats.filter(r => r.tier === i && !r.temp).length]).filter(([, n]) => n).map(([t, n]) => `<span class="rar" style="background:${t.col}">${t.name} ${n}</span>`).join(' ');
+    const beat = Object.keys(S.bossBeat || {}).map(Number).sort((a, b) => a - b);
+    const sk = RSKILLS.filter(s => lv(s.id)).map(s => { const max = s.max && lv(s.id) >= s.max; return `<div class="st-skill${max ? ' max' : ''}"><span class="ic">${s.icon}</span><div><b>${s.name} <small>Lv ${lv(s.id)}${s.max ? '/' + s.max : ''}${max ? ' ✨MAX' : ''}</small></b><small>${curEffect(s.desc(lv(s.id)))}</small></div></div>`; }).join('') || '<p class="desc">아직 찍은 스킬이 없어요</p>';
+    const shards = Object.keys(S.seen).map(id => [RSPECIES_BY_ID[id], shardLevel(id)]).filter(([sp, s]) => sp && s.L).sort((a, b) => b[1].L - a[1].L || b[0].tier - a[0].tier).slice(0, 12)
+      .map(([sp, s]) => `<div class="st-row"><span><span style="color:${shade(TIERS[sp.tier].col, -0.25)}">●</span> ${sp.name}</span><b>⭐ Lv ${s.L}</b></div>`).join('') || '<p class="desc">같은 쥐를 또 얻으면 조각이 모여요</p>';
+    $('statsBody').innerHTML = `
+      <div class="st-col panel"><h3>🏢 탈출 현황</h3>
+        ${row('현재 층', `${S.floor}층 · ${zoneOf().name}`)}${row('최고 기록', `${S.maxFloor || 1}층`)}
+        ${row('다음 보스', `${Math.ceil((S.floor + 0.01) / BOSS_EVERY) * BOSS_EVERY}층`)}${row('격파한 보스', beat.length ? beat.map(f => f + '층').join(', ') : '-')}
+        ${S.bossFail ? row('재도전 대기', `${S.bossFail}층 보스`) : ''}
+        <h3>🐀 무리</h3>
+        ${row('쥐', `${ratCount()} / ${popCap()}마리${popFull() ? ' (가득 · 탄생 멈춤)' : ''}`)}<div class="st-tiers">${tiers}</div>
+        ${row('번식 쿨타임', `${breedCool().toFixed(1)}초`)}${row('번식 확률', `${Math.round(breedChance() * 100)}% (쥐가 많을수록 ↓)`)}${row('이동 속도', `+${Math.round(8 * lv('speed'))}%`)}
+        ${row('윗등급 탄생 보정', `+${lv('mutate') * 3}% · 난동 ${S.ramp}`)}</div>
+      <div class="st-col panel"><h3>⚔️ 공격</h3>
+        ${row('전투력', `${fmt(ratPower())} 찍찍!!`)}${row('갉는 힘', `×${fx(Math.pow(1.2, lv('teeth')))}`)}${row('벽에 주는 피해', `×${fx(digMult())}`)}
+        ${row('크리티컬 확률', `${5 + 2 * lv('critc')}%`)}${row('총공격', `${rushTime().toFixed(1)}초 · 피해 ×${rushMult().toFixed(1)}`)}
+        ${row('AIR 저글링 보너스', `×${(1 + 0.5 * lv('tumble')).toFixed(1)} (최대 ${AIR_MAX}회)`)}
+        <h3>🧀 수입</h3>
+        ${row('초당 치즈', fmt(S.ips))}${row('치즈 배율', `×${fx(Math.pow(1.15, lv('cheese')))}`)}${row('도감 보너스', `×${dexBonus().toFixed(2)}`)}
+        ${row('황금 물건', `${lv('goldx') * 2}%`)}${row('물건 솟아남', `${spawnInterval().toFixed(2)}초마다 ${spawnBatch()}개`)}${row('🚀 로켓배송', `${waveCool()}초마다 ${waveSize()}개`)}</div>
+      <div class="st-col panel"><h3>🌳 찍은 공용 스킬</h3><div class="st-skills">${sk}</div>
+        <h3>⭐ 조각 강화</h3>${shards}</div>`;
+  }
 
   // ── 승급 ──
   // 승급 패널: 줄은 한 번만 만들고, 이후엔 숫자·그림·버튼 상태만 바꾼다 (다시 그리면 클릭이 씹힘)
@@ -228,8 +335,8 @@ const UI = (() => {
     d.insertAdjacentHTML('beforeend', `<span class="rar" style="background:${t.col}">${t.name}</span><h3>${known ? sp.name : '???'}</h3><p class="desc">${known ? sp.desc : '아직 만나지 못한 쥐'}</p>
       <div class="ab-card">${known ? sp.ab.icon : '❔'} <b>${known ? sp.ab.name : '???'}</b><small>${known ? abDesc(sp, rsl(sp.id, 'special')) : '만나면 알 수 있어요'}</small></div>
       ${sp.ult ? `<div class="ab-card ult">${known ? sp.ult.fx : '❔'} <b>필살기 · ${known ? sp.ult.name : '???'}</b><small>${known ? '가끔 컷씬과 함께 발동: ' + ULT_TYPES[sp.ult.type] : '전설 이상 쥐의 필살기'}</small></div>` : ''}
-      <div class="ab-card act">${known ? sp.act.icon : '❔'} <b>${known ? sp.act.name : '???'}</b><small>${known ? (rsl(sp.id, 'act') ? '' : '🔒 스킬 트리에서 해금 · ') + actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '특수 액션'}</small></div>
-      <div class="stats"><div>기본 힘<b>×${t.dmg}</b></div><div>크기<b>×${t.size}</b></div><div>스킬 레벨<b>${RAT_TREE.reduce((a, s) => a + rsl(sp.id, s.id), 0)}</b></div><div>지금 무리에<b>${counts[sp.id] || 0}마리</b></div></div>`);
+      <div class="ab-card act">${known ? sp.act.icon : '❔'} <b>${known ? sp.act.name : '???'}</b><small>${known ? (rsl(sp.id, 'act') ? '' : '🔒 조각 강화로 해금 · ') + actDesc(sp, rsl(sp.id, 'act'), rsl(sp.id, 'actPow')) : '특수 액션'}</small></div>
+      <div class="stats"><div>기본 힘<b>×${t.dmg}</b></div><div>크기<b>×${t.size}</b></div><div>⭐ 조각 강화<b>Lv ${shardLevel(sp.id).L}</b></div><div>지금 무리에<b>${counts[sp.id] || 0}마리</b></div></div>`);
     if (known) { const b = document.createElement('button'); b.className = 'big'; b.textContent = '🌳 스킬 트리'; b.onclick = () => openTree(sp.id); d.appendChild(b); }
   }
 
@@ -257,6 +364,21 @@ const UI = (() => {
     else if (isBirth && sp.tier >= 2) toast(sp, `${TIERS[sp.tier].name} 탄생!`, sp.name);
   }
 
+  // 일괄 승급: 가능한 등급을 낮은 것부터 반복 (승급으로 생긴 쥐도 다시 모이면 계속).
+  // 번식할 쥐는 PROMO_KEEP 마리 남겨둠 (초반에 눌러서 2마리만 남으면 번식이 멈춤 — 시뮬에서 발견)
+  function promoteAll() {
+    const got = {}; let n = 0;
+    for (let guard = 0; guard < 500; guard++) {
+      if (G.rats.filter(r => !r.temp).length - PROMOTE_COST + 1 < PROMO_KEEP) break;
+      const t = TIERS.findIndex((_, i) => canPromote(i)); if (t < 0) break;
+      const sp = promote(t); if (!sp) break;
+      got[sp.tier] = (got[sp.tier] || 0) + 1; n++;
+    }
+    if (!n) { Sfx.deny(); toast(RSPECIES[0], '⏫ 일괄 승급할 수 없어요', `같은 등급 ${PROMOTE_COST}마리 + 번식용 ${PROMO_KEEP}마리는 남겨둬요`); return; }
+    const top = Math.max(...Object.keys(got).map(Number));
+    toast(G.rats.find(r => r.tier === top)?.sp || RSPECIES[0], `⏫ 일괄 승급 ${n}회!`, Object.entries(got).map(([t, c]) => `${TIERS[t].name} ${c}마리`).join(' · '));
+    renderPromo(); hud(); Sfx.clear();
+  }
   function openPanel(id, render) { render(); show(id); Sfx.click(); }
   function init() {
     $('btnStart').onclick = () => {
@@ -269,24 +391,38 @@ const UI = (() => {
     };
     $('offOk').onclick = () => { hide('offline'); Sfx.buy(); };
     $('btnReset').onclick = () => show('resetAsk');
-    $('btnReset2').onclick = () => { ['tree', 'promo', 'dex'].forEach(hide); show('resetAsk'); Sfx.click(); };
+    $('btnReset2').onclick = () => { ['tree', 'promo', 'dex', 'stats'].forEach(hide); show('resetAsk'); Sfx.click(); };
     $('rsNo').onclick = () => hide('resetAsk');
     $('rsYes').onclick = () => { resetting = true; localStorage.removeItem(SAVE_KEY); location.reload(); };
     $('btnSkills').onclick = () => openTree('common');
     document.querySelectorAll('.amt button').forEach(b => (b.onclick = () => { amt = b.dataset.amt === 'max' ? 'max' : +b.dataset.amt; document.querySelectorAll('.amt button').forEach(o => o.classList.toggle('on', o === b)); renderSkillDetail(true); Sfx.click(); }));
     $('dBuy').onclick = buy;
     $('btnPromo').onclick = () => openPanel('promo', renderPromo);
+    $('btnPromoAll').onclick = promoteAll;
+    $('btnStats').onclick = () => openPanel('stats', renderStats);
+    // 테스트용: 보스 4종을 차례로 화면 가운데에 소환 (자연 등장은 BOSS_EVERY 층마다)
+    // 테스트용: 고양이 품종을 차례로 화면 가운데에 (체력·날리기·품종 스킬 확인)
+    $('btnCat').onclick = () => { ['tree', 'promo', 'dex', 'stats'].forEach(hide); if (!testCat()) Sfx.deny(); };
+    $('btnBoss').onclick = () => { ['tree', 'promo', 'dex', 'stats'].forEach(hide); if (!testBoss()) Sfx.deny(); };
     $('btnDex').onclick = () => openPanel('dex', renderDex);
     // 테스트용: 화면 가운데 쥐가 슈퍼 점프 강제 발동 (이미 진행 중이면 무시)
     $('btnSJ').onclick = () => { ['tree', 'promo', 'dex'].forEach(hide); if (!startSuperJump(true)) Sfx.deny(); };
     // 테스트용: 전설·신화 필살기 24종을 차례로 강제 발동 (화면에 없는 종은 잠깐 불러옴)
-    $('btnUlt').onclick = () => { ['tree', 'promo', 'dex'].forEach(hide); if (!testUlt()) Sfx.deny(); };
+    // 테스트용: 필살기 목록에서 골라서 발동 (그 종이 화면에 없으면 잠깐 불러옴). 패러디 필살기는 맨 위에
+    $('btnUlt').onclick = () => {
+      ['tree', 'promo', 'dex', 'stats'].forEach(hide);
+      const order = ULT_LIST.map((u, i) => i).sort((a, b) => (['zapham', 'parkrat', 'plaguerat', 'streamrat', 'starchef'].includes(ULT_LIST[b].id) - ['zapham', 'parkrat', 'plaguerat', 'streamrat', 'starchef'].includes(ULT_LIST[a].id)));
+      $('ultList').innerHTML = order.map(i => { const u = ULT_LIST[i], sp = RSPECIES_BY_ID[u.id]; return `<button class="ult-pick" data-i="${i}" style="--rc:${TIERS[sp.tier].col}"><span class="ic">${u.fx}</span><b>${u.name}</b><small>${sp.name} · ${TIERS[sp.tier].name}</small></button>`; }).join('');
+      for (const b of document.querySelectorAll('#ultList .ult-pick')) b.onclick = () => { hide('ultPick'); if (!testUlt(+b.dataset.i)) Sfx.deny(); };
+      show('ultPick'); Sfx.click();
+    };
+    $('btnClimb').onclick = () => { Sfx.resume(); climb(); $('btnClimb').classList.add('hidden'); };
     $('btnMute').onclick = () => { S.muted = Sfx.toggle(); $('btnMute').textContent = S.muted ? '🔇' : '🔊'; };
     if (S.muted) { Sfx.toggle(); $('btnMute').textContent = '🔇'; }
     document.querySelectorAll('.close').forEach(b => (b.onclick = () => { b.closest('.screen').classList.add('hidden'); Sfx.click(); }));
     $('ncOk').onclick = () => { hide('newcat'); setTimeout(showNew, 300); };
     window.addEventListener('keydown', e => {
-      if (e.key === 'Escape') ['tree', 'promo', 'dex'].forEach(hide);
+      if (e.key === 'Escape') ['tree', 'promo', 'dex', 'stats', 'ultPick'].forEach(hide);
     });
     // 패널이 열려 있으면 주기적으로 새로고침 (치즈 변동 반영)
     setInterval(() => {
@@ -294,6 +430,8 @@ const UI = (() => {
       hud();
       if (!$('tree').classList.contains('hidden')) refreshTreeAfford();
       if (!$('promo').classList.contains('hidden')) renderPromo();
+      if (!$('stats').classList.contains('hidden')) renderStats();
+      $('btnPromoAll').disabled = !TIERS.some((t, i) => canPromote(i));
     }, 500);
     hud();
   }

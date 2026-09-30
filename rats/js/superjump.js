@@ -5,6 +5,7 @@
 // → ⑤ 화면 속 쥐·물건이 전부 둥실 → ⑥ 물건·벽 한꺼번에 박살 → ⑦ 쥐들 착지, 게임 재개
 const SJ_T = { cutin: 1.9, charge: 1.5, launch: 0.35, sky: 1.3, fall: 0.38, float: 1.5, drop: 1 };
 const SJ_CHANCE = 1 / 480;      // 화면에 쥐가 있을 때 초당 확률 (평균 8분에 한 번)
+const SJ_ITEM = 15;             // 슈퍼 점프 피해 = 쥐 공격력 × 15 (화면 속 물건 전부에. 사람·고양이는 ×2)
 const SJ_COOL = 120;            // 한 번 터지면 최소 2분은 쉼 (첫 발동도 시작 1분 뒤부터)
 const sjEase = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 
@@ -12,7 +13,7 @@ function trySuperJump(dt) {
   if (G.sj || G.ult) return;
   G.sjCool = (G.sjCool ?? 60) - dt;
   // 스킬·도감 같은 창이 열려 있으면 안 보이니까 참았다가 나중에
-  if (G.sjCool <= 0 && Math.random() < SJ_CHANCE * dt && !document.querySelector('.screen:not(.hidden)')) startSuperJump(false);
+  if (G.sjCool <= 0 && Math.random() < SJ_CHANCE * (1 + 0.25 * lv('sjump')) * dt && !document.querySelector('.screen:not(.hidden)')) startSuperJump(false);
 }
 function startSuperJump(forced) {
   if (G.sj || G.ult || !G.running) return false;
@@ -130,6 +131,7 @@ function sjImpact(s) {
   }
   // 화면에 걸친 벽 (막힌 벽만)
   for (const w of visibleWalls()) {
+    if (w.solid) continue;                       // 연구소 바깥벽은 못 부숨
     const hit = w.di ? w.x > vr.x0 && w.x < vr.x1 && w.y1 > vr.y0 && w.y0 < vr.y1 : w.y > vr.y0 && w.y < vr.y1 && w.x1 > vr.x0 && w.x0 < vr.x1;
     if (hit) s.walls.push(w);
   }
@@ -147,11 +149,18 @@ function sjBoom(s) {
   sjPhase(s, 'drop'); s.boom2T = G.t;
   G.quiet = true;
   let n = 0;
-  for (const f of s.items) { const it = f.it; it.state = 'fly'; it.air = Math.max(it.air, 2); it.crit = true; smashItem(it); n++; }
+  // 화면 속 물건: 슈퍼 점프 피해(쥐 공격력 × SJ_ITEM) — 체력이 남은 건 튕겨 나갔다 착지
+  const sjD = ratDamage(s.r) * SJ_ITEM;
+  for (const f of s.items) { const it = f.it; it.air = Math.max(it.air, 2); it.crit = true; if (skillBlastItem(it, sjD, s.r, rand(0, 6.28), 260, 520)) n++; }
   G.quiet = false;
   G.items = G.items.filter(it => it.state !== 'dead');
+  // 화면 안 사람은 전부 하늘로, 고양이는 퇴치, 보스는 최대 체력의 20%
+  const vr = viewRect(0);
+  for (const h of [...G.humans]) if (inRect(h.x, h.y, vr)) { if (h.boss) damageHuman(h, h.hpMax * 0.2, s.r, 0); else if (blastActor(h, rand(0, 6.28), rand(300, 520), sjD * 2, s.r) && h.hp <= 0) h.vz = rand(900, 1200); }
+  if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, sjD * 2, rand(0, 6.28), s.r);
   const nw = s.walls.length;
-  for (const w of s.walls) breakWall(w.i, w.j, w.di, w.dj);
+  // 계단 방 벽은 한 방에 안 무너짐 (최대 체력의 25%만): 층 넘어가기는 쥐들이 직접 해내야 함
+  for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy); else breakWall(w.i, w.j, w.di, w.dj); }
   G.hitstop = 0;
   for (const w of s.walls) delete G.wallShake[w.key];
   s.walls = [];

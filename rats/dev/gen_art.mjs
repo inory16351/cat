@@ -34,7 +34,7 @@ function sheetPrompt(items) {
   return [
     STYLE,
     `Asset: a game SPRITE SHEET of ${items.length} separate small objects. Canvas: landscape 1536x1024, fully transparent background.`,
-    `Layout: an invisible grid of ${COLS} columns x ${ROWS} rows of equal cells (384x341 each). Exactly ONE object per cell, centered, filling about 70% of its cell, with generous empty margin. Objects never touch each other or the cell borders. Same art style and lighting for all.`,
+    `Layout: an invisible grid of ${COLS} columns x ${ROWS} rows of equal cells (384x341 each). Exactly ONE object per cell, centered, filling about 70% of its cell, with generous empty margin. Objects never touch each other or the cell borders. Same art style and lighting for all. Unless a cell says otherwise, draw the object in a gentle three-quarter view from slightly above, standing on its base.`,
     'Cells in reading order (left to right, top to bottom):',
     ...items.map((a, i) => `${i + 1}. ${a.desc}`),
     ...(items.length < PER ? [`Cells ${items.length + 1} to ${PER}: completely EMPTY.`] : []),

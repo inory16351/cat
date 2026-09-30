@@ -5,7 +5,8 @@
 // 좌표계: 발끝 = 원점, 왼쪽을 봄. 다리 각도 +는 앞(왼쪽)으로, 머리 +는 아래로 숙임, 꼬리 +는 위로.
 const RAT_RIGS = {};
 // 체형별 몸길이(게임 단위). 코드 그림(rodent.js)과 비슷한 크기로 맞춘다
-const RIG_LEN = { rat: 46, mouse: 36, hamster: 34, gerbil: 38 };
+const RIG_LEN = { rat: 46, mouse: 36, hamster: 34, gerbil: 38, squirrel: 25 };
+const RIG_LEN_ID = { jwerry: 27 };                    // 종별로 따로 (줴리: 패러디답게 더 작게)   // 다람쥐는 꼬리가 위로 솟아 키가 커 보여서 몸은 작게 (25 = 키가 다른 신화 쥐와 비슷, 필살기 앞모습과도 같은 크기)
 
 function loadRatParts() {
   if (typeof RAT_PARTS === 'undefined') return;
@@ -40,10 +41,10 @@ function buildRatRig(id, imgs) {
   const place = k => { const [x, y] = at(k); return [torsoX + x, torsoY + y]; };
   const len = T.width + (imgs.head ? imgs.head.width * headScale * 0.55 : 0);
   RAT_RIGS[id] = {
-    imgs, pivot: M.pivot, legScale: ls, headScale,
+    id, imgs, pivot: M.pivot, legScale: ls, headScale,
     farFront: imgs.front && darkerCopy(imgs.front, 0.22), farBack: imgs.back && darkerCopy(imgs.back, 0.22),
     torso: [torsoX, torsoY], neck: place('neck'), tail: place('tail'), shoulder: place('shoulder'), hip: place('hip'),
-    unit: (RIG_LEN[sp.shape] || 44) / len,           // 이미지 픽셀 → 게임 단위
+    unit: (RIG_LEN_ID[id] || RIG_LEN[sp.shape] || 44) / len,           // 이미지 픽셀 → 게임 단위
     height: -torsoY,
   };
 }
@@ -122,6 +123,8 @@ function ratPose(r) {
 }
 
 // 발끝 = 원점 좌표계에 조립해서 그림. s = 게임 단위 배율
+// 안경 쓴 종: 머리 그림 안 가까운 눈 위치(x,y)·알 크기(r, 가로 비율)·안경다리 끝(ax,ay)
+const RIG_GLASSES = { streamrat: { x: 0.4, y: 0.47, r: 0.075, ax: 0.6, ay: 0.4 } };
 function drawRatRig(rig, s, pose, g = ctx) {
   const I = rig.imgs, P = rig.pivot, L = rig.legScale;
   const part = (img, anchor, pivot, ang, dx = 0, dy = 0, sc = 1) => {
@@ -135,25 +138,95 @@ function drawRatRig(rig, s, pose, g = ctx) {
   const drop = pose.napDrop && I.front ? I.front.height * (1 - P.front[1]) * L.front * 0.75 : 0;
   g.translate(0, pose.bob / rig.unit + drop);
   g.scale(pose.sx || 1, pose.sy || 1);
+  const FX = typeof FR_IMG !== 'undefined' ? FR_IMG : {}, FM = typeof FRONT_PARTS !== 'undefined' ? FRONT_PARTS : {};
+  if (pose.log && FX.rss_log) {
+    // 통나무 위에 올라섬 (람쥐썬더 원본 짤): 통나무는 땅에, 다람쥐는 통나무 윗면 높이로
+    const lw = I.torso.width * 1.9, lh = lw * FX.rss_log.height / FX.rss_log.width;
+    g.drawImage(FX.rss_log, -lw * 0.55, -lh * 0.95, lw, lh); g.translate(0, -lh * 0.62);
+  }
   g.translate(rig.hip[0], rig.hip[1]); g.rotate(-pose.tilt); g.translate(-rig.hip[0], -rig.hip[1]);
   const gap = I.torso.width * 0.07, u = 1 / rig.unit;
+  // 추가 파츠(front_meta 의 rss_*): 따로 생성해 배율이 달라서 기존 파츠 길이(refH) 기준으로 맞춤. 피벗 = 관절(든 팔은 아래 어깨, 웅크린 다리는 위 엉덩이)
+  const extraPart = (id, at, refH, ang, dx = 0) => {
+    const im = FX[id], m = FM[id]; if (!im || !m) return null;
+    const k = refH / m.size[1], w = m.size[0] * k, h = m.size[1] * k;
+    g.save(); g.translate(at[0] + dx, at[1]); g.rotate(ang); g.drawImage(im, -m.pivot[0] * w, -m.pivot[1] * h, w, h); g.restore();
+    return { w, h, py: m.pivot[1] };
+  };
   // 먼 쪽 다리(어둡게)·꼬리는 몸통 뒤, 가까운 쪽 다리는 몸통 위에 겹쳐서 허벅지·어깨가 몸에 붙어 보이게
-  part(rig.farBack, rig.hip, P.back, pose.farBack, gap, 0, L.back);
+  const crouch = pose.crouch && FX.rss_leg_crouch && I.back;
+  if (crouch) { g.save(); g.globalAlpha = 1; g.filter = 'brightness(0.8)'; extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.farBack, gap); g.restore(); }
+  else part(rig.farBack, rig.hip, P.back, pose.farBack, gap, 0, L.back);
+  // 망토 (필살기 토르 코스프레): 몸통 뒤에서 뒤로 펄럭. 걸쇠(그림 왼쪽 위)를 목에
+  if (pose.cape && IMG['art_ult:thor_cape']) {
+    const im = IMG['art_ult:thor_cape'], cw = I.torso.width * 1.25 * pose.cape, ch = cw * im.height / im.width, fl = 1 + Math.sin(G.t * 14) * 0.06;
+    g.save(); g.translate(rig.neck[0] + I.torso.width * 0.05, rig.neck[1] + I.torso.height * 0.1); g.rotate(-0.15 + Math.sin(G.t * 9) * 0.05); g.scale(fl, 1 / fl); g.drawImage(im, -cw * 0.1, -ch * 0.12, cw, ch); g.restore();
+  }
   part(rig.farFront, rig.shoulder, P.front, pose.farFront, gap, 0, L.front);
+  if (pose.prop2 && I.front) {                       // 뒤쪽 앞발 소품 (쌍권총)
+    const len = I.front.height * (1 - P.front[1]) * L.front * 0.9, a = pose.farFront;
+    g.save(); g.translate(rig.shoulder[0] + gap - Math.sin(a) * len, rig.shoulder[1] + Math.cos(a) * len); g.rotate(a * 0.5 + (pose.propRot2 ?? pose.propRot ?? 0)); drawProp(g, pose.prop2, (pose.propSize || 15) * u); g.restore();
+  }
   part(I.tail, rig.tail, P.tail, -pose.tail);
   g.drawImage(I.torso, rig.torso[0], rig.torso[1]);
-  part(I.back, rig.hip, P.back, pose.back, 0, 0, L.back * (pose.kickLeg ? 1.1 : 1));
-  const raised = pose.front > 0.9;                       // 치켜든 앞발은 얼굴 앞으로
+  if (crouch) extraPart('rss_leg_crouch', rig.hip, I.back.height * L.back * 0.85, pose.back);
+  else part(I.back, rig.hip, P.back, pose.back, 0, 0, L.back * (pose.kickLeg ? 1.1 : 1));
+  const armUp = pose.armUp && FX[pose.armUp] && I.front;       // 'rss_arm_up' | 'rss_arm_up2' = 팔꿈치 굽혀 머리 위로 번쩍 (람쥐썬더)
+  const raised = pose.front > 0.9 || armUp;                    // 치켜든 앞발은 얼굴 앞으로
   if (!raised) part(I.front, rig.shoulder, P.front, pose.front, 0, 0, L.front);
   part(I.head, rig.neck, P.head, -pose.head, (pose.headX || 0) * u, (pose.headY || 0) * u, rig.headScale);
-  if (raised) part(I.front, rig.shoulder, P.front, pose.front, 0, 0, L.front);
+  // 투구 (필살기 토르 코스프레): 머리 위
+  if (pose.helm && I.head && IMG['art_ult:thor_helm']) {
+    const im = IMG['art_ult:thor_helm'], H = I.head, hw = H.width * 0.8 * pose.helm, hh = hw * im.height / im.width;
+    g.save(); g.translate(rig.neck[0] + (pose.headX || 0) * u, rig.neck[1] + (pose.headY || 0) * u); g.rotate(-pose.head); g.scale(rig.headScale, rig.headScale);
+    g.translate(-P.head[0] * H.width, -P.head[1] * H.height); g.drawImage(im, H.width * 0.52 - hw / 2, H.height * 0.22 - hh * 0.75, hw, hh); g.restore();
+  }
+  const GL = RIG_GLASSES[rig.id];
+  if (GL && I.head) {
+    // 안경 (머리 그림 위에 코드로): 옆모습이라 가까운 알 하나 + 먼 알 살짝 + 다리는 헤드셋 쪽으로. glint = 안경 번쩍
+    const H = I.head, w = H.width, h = H.height;
+    g.save(); g.translate(rig.neck[0] + (pose.headX || 0) * u, rig.neck[1] + (pose.headY || 0) * u); g.rotate(-pose.head); g.scale(rig.headScale, rig.headScale);
+    g.translate(-P.head[0] * w, -P.head[1] * h);
+    const ex = GL.x * w, ey = GL.y * h, R = GL.r * w, lw = R * 0.28;
+    g.lineWidth = lw; g.strokeStyle = '#2b2522'; g.fillStyle = 'rgba(200,230,245,.35)';
+    g.beginPath(); g.ellipse(ex - R * 1.55, ey - R * 0.1, R * 0.55, R * 0.8, 0, 0, 6.28); g.fill(); g.stroke();       // 먼 알
+    g.beginPath(); g.moveTo(ex - R * 1.05, ey - R * 0.2); g.lineTo(ex - R * 0.95, ey - R * 0.2); g.stroke();              // 코다리
+    g.beginPath(); g.ellipse(ex, ey, R, R * 0.85, 0, 0, 6.28); g.fill(); g.stroke();                                       // 가까운 알
+    g.beginPath(); g.moveTo(ex + R, ey - R * 0.15); g.lineTo(GL.ax * w, GL.ay * h); g.stroke();                            // 안경다리
+    const gl = pose.glint || 0.35;
+    g.globalAlpha = Math.min(1, gl); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ex - R * 0.35, ey - R * 0.35, R * 0.28, R * 0.14, -0.6, 0, 6.28); g.fill();
+    if (pose.glint > 0.6) { g.globalAlpha = pose.glint - 0.6; g.strokeStyle = '#fff'; g.lineWidth = lw * 0.8; for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; g.beginPath(); g.moveTo(ex + Math.cos(a) * R * 1.2, ey + Math.sin(a) * R * 1.2); g.lineTo(ex + Math.cos(a) * R * 2.2, ey + Math.sin(a) * R * 2.2); g.stroke(); } }
+    g.restore();
+  }
+  if (armUp) {
+    const ang = pose.armUpRot || 0, r0 = extraPart(pose.armUp, rig.shoulder, I.front.height * L.front * 1.35, ang);
+    if (r0 && pose.pawBolt && typeof pawBolt === 'function') {
+      const d = r0.h * r0.py * 0.95;                           // 어깨(아래) → 손끝(위)
+      pawBolt(g, rig.shoulder[0] + Math.sin(ang) * d, rig.shoulder[1] - Math.cos(ang) * d, ang + (Math.random() - 0.5) * 0.5, I.torso.height * (0.8 + Math.random() * 0.5) * pose.pawBolt, 1);
+    }
+  } else if (raised) part(I.front, rig.shoulder, P.front, pose.front, 0, 0, L.front);
+  if (!armUp && pose.pawBolt && I.front && typeof pawBolt === 'function') {
+    // 치켜든 가까운 앞발 끝에서 번개 지지직 (람쥐썬더). 다리 방향 = (−sin a, cos a) → 그 연장선으로
+    const len = I.front.height * (1 - P.front[1]) * L.front * 0.95, a = pose.front;
+    pawBolt(g, rig.shoulder[0] - Math.sin(a) * len, rig.shoulder[1] + Math.cos(a) * len, a + Math.PI + (Math.random() - 0.5) * 0.5, I.torso.height * (0.8 + Math.random() * 0.5) * pose.pawBolt, 1);
+  }
   if (pose.prop && I.front) {
     // 앞발 끝에 소품 (이모지)
     const len = I.front.height * (1 - P.front[1]) * L.front * 0.9, a = pose.front;
     g.save(); g.translate(rig.shoulder[0] - Math.sin(a) * len, rig.shoulder[1] + Math.cos(a) * len); g.rotate(a * 0.5);
-    drawProp(g, pose.prop, 15 * u);
+    g.rotate(pose.propRot || 0); drawProp(g, pose.prop, (pose.propSize || 15) * u);
     g.restore();
   }
   g.restore();
+}
+// 입 위치 (쥐 발밑 기준 월드 오프셋 dx, 높이 dz). 머리 이미지는 왼쪽을 보고 입은 왼쪽 끝 아래쪽 (코끝 살짝 아래)
+function ratMouth(r) {
+  const sc = RAT_SCALE * TIERS[r.tier].size, rig = RAT_RIGS[r.sp.id];
+  if (!rig || !rig.imgs.head) return { dx: r.face * 20 * sc, dz: 13 * sc };
+  const H = rig.imgs.head, P = rig.pivot.head, hs = rig.headScale, a = -((r.pose && r.pose.head) || 0);
+  const mx = (0.07 - P[0]) * H.width * hs, my = (0.72 - P[1]) * H.height * hs, u = 1 / rig.unit;
+  const px = rig.neck[0] + mx * Math.cos(a) - my * Math.sin(a) + ((r.pose && r.pose.headX) || 0) * u;
+  const py = rig.neck[1] + mx * Math.sin(a) + my * Math.cos(a);
+  return { dx: -r.face * px * rig.unit * sc, dz: -py * rig.unit * sc };
 }
 loadRatParts();
