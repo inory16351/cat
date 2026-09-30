@@ -176,8 +176,9 @@ Object.assign(ULT_ENG, {
   },
   // 슈퍼 요리사 쥐 (늘 요리사를 타고 있음): 주변 물건을 전부 거대 냄비에 넣고 보글보글 → "완성!" 하는 순간 대폭발
   grandcuisine: {
-    dur: 4.6,
-    beats: [[0.1, s => ucap(s, '재료는 전부 넣어! 이랴!')], [1.9, s => ucap(s, '(보글보글… 이상한 냄새가 난다)', { size: 28 })], [3.3, s => ucap(s, '완성!! 대왕 치즈 요리!!', { size: 60, col: '#f0c878', y: 0.5, dur: 1 })]],
+    // 재료 투입 0.25~1.75초 → 1.9초부터 보글보글 (끓는 동안에도 0.2초마다 재료 추가, 4.4초까지) → 4.9초 완성 대폭발
+    dur: 6.2, done: 4.9,
+    beats: [[0.1, s => ucap(s, '재료는 전부 넣어! 이랴!')], [1.9, s => ucap(s, '(보글보글… 이상한 냄새가 난다)', { size: 28 })], [3.3, s => ucap(s, '더 넣어!! 전부 다!!', { col: '#fff3bf' })], [4.9, s => ucap(s, '완성!! 대왕 치즈 요리!!', { size: 60, col: '#f0c878', y: 0.5, dur: 1 })]],
     start(s) {
       const r = s.r;
       s.pot = { x: r.x + r.face * 170, y: r.y + 10 }; confine(s.pot, 80, r.x, r.y, 0, null);
@@ -188,10 +189,12 @@ Object.assign(ULT_ENG, {
       for (const h of humansNear(s.pot.x, s.pot.y, ULT_R)) { h.say = { text: pick(['내 주방 도구!!', '그건 재료가 아니야!', '위생 점검은?!']), t: 1.4 }; panic(h); }
     },
     step(s, dt) {
-      const r = s.r, P = s.pot;
+      const r = s.r, P = s.pot, T = ULT_ENG.grandcuisine.done;
       r.face = P.x > r.x ? 1 : -1;
       r.pose = { front: 2.4 + Math.sin(G.t * 16) * 0.5, farFront: 2.0 + Math.cos(G.t * 16) * 0.5, head: -0.25, tail: 1.2, tilt: -0.15 };   // 국자 휘휘
-      if (s.t < 3.3 && Math.random() < 0.3) r.say = { text: pick(['이랴!', '더 넣어!', '소금!', '봉주르~', '(휘적휘적)']), t: 0.4 };
+      if (s.t < T && Math.random() < 0.3) r.say = { text: pick(['이랴!', '더 넣어!', '소금!', '봉주르~', '(휘적휘적)']), t: 0.4 };
+      // 끓는 동안에도 주변 물건을 하나씩 더 퐁당 (추가는 최대 20개)
+      if (s.t > 1.9 && s.t < T - 0.5 && (s.addN || 0) < 20 && (s.addT = (s.addT ?? 0) - dt) <= 0) { s.addT = 0.2; const it = nearestItem(P, ULT_R + 200); if (it && grabItem(s, it)) { s.addN = (s.addN || 0) + 1; s.ing.push({ it, x0: it.x, y0: it.y, t0: s.t, h: rand(220, 360) }); } }
       for (const g of s.ing) {
         const it = g.it; if (it.state !== 'held' || g.done) continue;
         const k = clamp((s.t - g.t0) / 0.55, 0, 1); if (k <= 0) continue;
@@ -199,9 +202,9 @@ Object.assign(ULT_ENG, {
         if (k >= 1) { g.done = true; it.inPot = true; s.inN++; if (onScreen(P.x, P.y)) { burst(P.x, P.y, 4, { colors: ['#f0c878', '#fff3bf'], min: 60, max: 180, s0: 3, s1: 6, z: 115 }); if (s.inN % 3 === 0) { popup(P.x, P.y, pick(['퐁당!', '풍덩!', '첨벙!']), '#fff', 18, 0.5, 140); Sfx.pop(); } } }
       }
       const fill = s.ing.length ? s.inN / s.ing.length : 1;
-      if (s.t > 1.9 && s.t < 3.3) { if (Math.random() < 0.5) particle({ x: P.x + rand(-50, 50), y: P.y, z: 120, vx: rand(-20, 20), vy: 0, vz: rand(60, 120), life: 1, max: 1, size: rand(14, 24), color: 'rgba(250,247,240,', type: 'dust', drag: 1 }); addShake(0.01 + (s.t - 1.9) * 0.01); }
+      if (s.t > 1.9 && s.t < T) { if (Math.random() < 0.5) particle({ x: P.x + rand(-50, 50), y: P.y, z: 120, vx: rand(-20, 20), vy: 0, vz: rand(60, 120), life: 1, max: 1, size: rand(14, 24), color: 'rgba(250,247,240,', type: 'dust', drag: 1 }); addShake(0.01 + Math.min(1.4, s.t - 1.9) * 0.01); }
       s.fill = fill; s.hot = clamp((s.t - 1.9) / 1.4, 0, 1);
-      if (s.t >= 3.3 && !s.boom) {
+      if (s.t >= T && !s.boom) {
         // 완성 → 펑!! 재료 전부 치즈 폭죽으로 (보너스: 공중 콤보·크리티컬 취급)
         s.boom = true;
         G.quiet = true;
@@ -217,18 +220,19 @@ Object.assign(ULT_ENG, {
       }
     },
     end(s) { for (const g of s.ing || []) if (g.it.inPot) g.it.inPot = false; },
-    sorted(s) { return s.pot && !s.boom ? [{ y: s.pot.y, f: () => drawPot(s.pot.x, s.pot.y * TILT, s.fill || 0, s.t > 1.9 ? 1 + (s.t - 1.9) * 3 : 0, s.hot || 0) }] : []; },
+    sorted(s) { return s.pot && !s.boom ? [{ y: s.pot.y, f: () => drawPot(s.pot.x, s.pot.y * TILT, s.fill || 0, s.t > 1.9 ? 1 + Math.min(2.4, s.t - 1.9) * 3 : 0, s.hot || 0) }] : []; },
   },
   // 찌릿 햄찌: 건전지 과충전 → 물건·사람 사이로 연쇄 번개 → 건전지 펑! 본인은 아프로 머리
   overcharge: {
-    dur: 3.9,
-    beats: [[0.1, s => ucap(s, '(건전지 충전 중… 1.5V)', { size: 28 })], [0.85, s => ucap(s, '찌이이이이릿!!!', { size: 56, col: '#f2c94c', y: 0.5, dur: 0.9 })], [3.05, s => ucap(s, '(건전지는 분리수거 해주세요)')]],
+    // 충전 0.8초 → 연쇄 번개 5.3초까지 → 건전지 펑
+    dur: 6.2, boomT: 5.3,
+    beats: [[0.1, s => ucap(s, '(건전지 충전 중… 1.5V)', { size: 28 })], [0.85, s => ucap(s, '찌이이이이릿!!!', { size: 56, col: '#f2c94c', y: 0.5, dur: 0.9 })], [3, s => ucap(s, '(전압 초과… 9V… 220V…)', { size: 28 })], [5.35, s => ucap(s, '(건전지는 분리수거 해주세요)')]],
     start(s) { s.zaps = []; s.hitT = 0; },
     step(s, dt) {
       const r = s.r;
       if (s.t < 0.8) { r.jit = 2 + s.t * 4; r.pose = { head: -0.2, front: 0.6, farFront: 0.5, tail: 1.2, tilt: -0.1 }; if (Math.random() < 0.6) particle({ x: r.x + rand(-20, 20), y: r.y, z: rand(10, 40), vx: rand(-80, 80), vy: rand(-40, 40), vz: 120, life: 0.25, max: 0.25, size: 4, color: '#f2c94c', type: 'spark', drag: 2 }); return; }
       r.jit = 1.5;
-      if (s.t < 3) {
+      if (s.t < ULT_ENG.overcharge.boomT) {
         r.pose = { ...POSE_UP, front: 2.6 + Math.sin(G.t * 30) * 0.2, farFront: 2.2 };
         ultWalk(s, dt, 70);
         if ((s.hitT -= dt) <= 0) {
@@ -243,10 +247,10 @@ Object.assign(ULT_ENG, {
             if (!best) break;
             used.add(best); cx = best.x; cy = best.y;
             pts.push([cx, cy * TILT - (best.k ? 80 : 14)]);
-            if (best.k) { if (best.boss) damageHuman(best, ultD(s) * 0.6, r, 0); else { best.jit = 6; damageHuman(best, best.hpMax * 0.45, r, rand(0, 6.28)); } if (onScreen(cx, cy) && Math.random() < 0.4) popup(cx, cy, pick(['찌릿!', '지지직!', '(뼈가 보임)']), '#f2c94c', 18, 0.6, 120); }
-            else { damageItem(best, ultD(s) * 0.35, r, false, rand(0, 6.28)); best.flashT = 0.12; }
+            if (best.k) { if (best.boss) damageHuman(best, ultD(s) * 0.42, r, 0); else { best.jit = 6; damageHuman(best, best.hpMax * 0.45, r, rand(0, 6.28)); } if (onScreen(cx, cy) && Math.random() < 0.4) popup(cx, cy, pick(['찌릿!', '지지직!', '(뼈가 보임)']), '#f2c94c', 18, 0.6, 120); }
+            else { damageItem(best, ultD(s) * 0.25, r, false, rand(0, 6.28)); best.flashT = 0.12; }
           }
-          if (G.cat && G.cat.state !== 'flung' && G.cat.state !== 'leave' && Math.hypot(G.cat.x - r.x, G.cat.y - r.y) < 360) { damageCat(G.cat, ultD(s) * 0.4, rand(0, 6.28), r); pts.push([G.cat.x, G.cat.y * TILT - 30]); }
+          if (G.cat && G.cat.state !== 'flung' && G.cat.state !== 'leave' && Math.hypot(G.cat.x - r.x, G.cat.y - r.y) < 360) { damageCat(G.cat, ultD(s) * 0.28, rand(0, 6.28), r); pts.push([G.cat.x, G.cat.y * TILT - 30]); }
           if (pts.length > 1) { s.zaps.push({ pts: pts.flatMap((p, i) => (i ? zapPath(pts[i - 1][0], pts[i - 1][1], p[0], p[1]).slice(1) : [p])), t: 0.14 }); Sfx.laser(); if (onScreen(r.x, r.y)) addShake(0.04); }
           // 쥐들은 찌릿해서 폴짝 (다치진 않음)
           for (const o of ratsNear(s, r.x, r.y, 200)) if (Math.random() < 0.3) { o.vz = 260; o.sq = 0.6; }
@@ -268,7 +272,7 @@ Object.assign(ULT_ENG, {
     draw(s) {
       const r = s.r;
       for (const z of s.zaps) drawZap(z.pts, '#f2c94c', 7);
-      if (s.t < 3 || !s.boom) { ctx.save(); ctx.translate(r.x + r.face * -6, r.y * TILT - r.z - 44); ctx.globalAlpha = 0.5 + 0.4 * Math.sin(G.t * 40); ultArt(ctx, 'battery', 34) || (ctx.fillStyle = '#f2c94c', rr(ctx, -16, -12, 32, 14, 4), ctx.fill()); ctx.restore(); }
+      if (!s.boom) { ctx.save(); ctx.translate(r.x + r.face * -6, r.y * TILT - r.z - 44); ctx.globalAlpha = 0.5 + 0.4 * Math.sin(G.t * 40); ultArt(ctx, 'battery', 34) || (ctx.fillStyle = '#f2c94c', rr(ctx, -16, -12, 32, 14, 4), ctx.fill()); ctx.restore(); }
       if (s.boom) {
         // 까맣게 탄 아프로 머리
         ctx.save(); ctx.translate(r.x - r.face * 14, r.y * TILT - r.z - 40); ctx.fillStyle = '#3d3a36';
@@ -279,25 +283,27 @@ Object.assign(ULT_ENG, {
   },
   // 쥐랜드 관광쥐: 물건·사람에 하트 풍선을 달아 둥실둥실 퍼레이드 → 풍선이 펑펑 터지며 와르르
   balloonparade: {
-    dur: 4.3,
-    beats: [[0.1, s => ucap(s, '🎵 꿈과 치즈의 나라로~ 🎵')], [1.4, s => ucap(s, '(풍선 하나 5만 원)', { size: 28 })], [2.9, s => ucap(s, '펑! 펑! 펑!', { size: 56, col: '#f2b8b0', y: 0.5, dur: 0.9 })]],
+    // 퍼레이드 4.8초까지 (걸어가며 0.35초마다 근처 물건에 풍선 추가, 최대 8개) → 풍선 펑펑
+    dur: 6.2, pop: 4.8,
+    beats: [[0.1, s => ucap(s, '🎵 꿈과 치즈의 나라로~ 🎵')], [1.4, s => ucap(s, '(풍선 하나 5만 원)', { size: 28 })], [3, s => ucap(s, '🎵 퍼레이드는 한 바퀴 더~ 🎵')], [4.8, s => ucap(s, '펑! 펑! 펑!', { size: 56, col: '#f2b8b0', y: 0.5, dur: 0.9 })]],
     start(s) {
       const r = s.r; s.fl = [];
       for (const it of itemsIn(r.x, r.y, ULT_R).slice(0, 16)) if (grabItem(s, it)) s.fl.push({ o: it, x0: it.x, y0: it.y, ph: rand(0, 6.28), h: rand(80, 140), d: rand(0, 0.6) });
       for (const h of humansNear(r.x, r.y, ULT_R).slice(0, 6)) if (holdHuman(s, h)) s.fl.push({ o: h, human: true, x0: h.x, y0: h.y, ph: rand(0, 6.28), h: rand(60, 100), d: rand(0, 0.4) });
     },
     step(s, dt) {
-      const r = s.r;
+      const r = s.r, T = ULT_ENG.balloonparade.pop;
       ultWalk(s, dt, 90);
+      if (s.t > 0.6 && s.t < T - 1.2 && (s.addN || 0) < 8 && (s.addT = (s.addT ?? 0) - dt) <= 0) { s.addT = 0.35; const it = nearestItem(r, 260); if (it && grabItem(s, it)) { s.addN = (s.addN || 0) + 1; s.fl.push({ o: it, x0: it.x, y0: it.y, ph: rand(0, 6.28), h: rand(80, 140), d: 0, t0: s.t - 0.2 }); } }
       r.pose = { front: 2.2 + Math.sin(G.t * 8) * 0.4, farFront: 0.4, head: Math.sin(G.t * 8) * 0.15, tail: 1 };
       for (const o of ratsNear(s, r.x, r.y, 400)) o.frenzy = Math.max(o.frenzy, 1);
       for (const f of s.fl) {
         const o = f.o;
-        if (s.t < 2.9) {
-          const e = sjEase(clamp((s.t - 0.2 - f.d) / 1.2, 0, 1));
+        if (s.t < T) {
+          const e = sjEase(clamp((s.t - (f.t0 || 0) - 0.2 - f.d) / 1.2, 0, 1));
           o.x = f.x0 + Math.sin(G.t * 1.6 + f.ph) * 30 * e; o.y = f.y0 + Math.cos(G.t * 1.3 + f.ph) * 10 * e; o.z = f.h * e + Math.sin(G.t * 3 + f.ph) * 8;
           if (f.human) { o.state = 'panic'; o.walk += dt * 12; if (!o.say && Math.random() < dt * 0.6) o.say = { text: pick(['내려줘어~!', '어어어?!', '무서워!!']), t: 1 }; }
-        } else if (!f.popped && s.t > 2.9 + f.d * 0.8) {
+        } else if (!f.popped && s.t > T + f.d * 0.8) {
           // 풍선 펑 → 떨어짐
           f.popped = true;
           if (onScreen(o.x, o.y)) { burst(o.x, o.y, 8, { colors: ['#f2b8b0', '#fff'], type: 'star', min: 120, max: 300, s0: 3, s1: 6, z: o.z + 60 }); popup(o.x, o.y, '펑!', '#fff', 18, 0.5, o.z + 70); Sfx.pop(); }
@@ -309,7 +315,7 @@ Object.assign(ULT_ENG, {
     end(s) { parodyRelease(s); },
     // 잘 보이게: 물건마다 색색 풍선 3개 묶음 + 반짝이, 땅엔 그림자, 떠 있는 물건은 하얗게 빛남
     draw(s) {
-      if (s.t > 3.8) return;
+      if (s.t > ULT_ENG.balloonparade.pop + 0.9) return;
       const HUES = [0, 45, 190, 120, 280];
       for (const f of s.fl) {
         if (f.popped) continue;
@@ -327,8 +333,8 @@ Object.assign(ULT_ENG, {
       }
     },
     // 화면: 위쪽 만국기 장식 + 색종이 비 + 살짝 파스텔 톤
-    ui(s, k) {
-      const a = Math.min(1, s.t / 0.3) * (k > 0.9 ? (1 - k) / 0.1 : 1);
+    ui(s) {
+      const a = Math.min(1, s.t / 0.3) * Math.min(1, (s.eng.dur - s.t) / 0.43);
       ctx.save(); ctx.globalAlpha = a;
       ctx.fillStyle = 'rgba(242,184,176,.12)'; ctx.fillRect(0, 0, W, H);
       const COLS = ['#e8786a', '#f0c878', '#9dd5a8', '#a9d3dc', '#cdb4db', '#f2b8b0'];
@@ -345,8 +351,9 @@ Object.assign(ULT_ENG, {
   },
   // 역병 석궁쥐: 투명해져서 킥킥 숨어 다니다가 → 석궁 난사 (초록 화살 + 역병 웅덩이)
   plaguespray: {
-    dur: 4.2,
-    beats: [[0.1, s => ucap(s, '(어디선가 킥킥 소리가 들린다…)', { size: 28 })], [1.1, s => ucap(s, '킥킥킥… 쏜다!!', { size: 52, col: '#9dbb8f', y: 0.5, dur: 0.8 })], [3.5, s => ucap(s, '(역병은 친환경 퇴비입니다)')]],
+    // 투명 살금살금 1.1초 → 석궁 난사 5.4초까지 → 여운
+    dur: 6.2, fire: 5.4,
+    beats: [[0.1, s => ucap(s, '(어디선가 킥킥 소리가 들린다…)', { size: 28 })], [1.1, s => ucap(s, '킥킥킥… 쏜다!!', { size: 52, col: '#9dbb8f', y: 0.5, dur: 0.8 })], [3.2, s => ucap(s, '(화살은 무한입니다. 킥킥)', { size: 28 })], [5.5, s => ucap(s, '(역병은 친환경 퇴비입니다)')]],
     start(s) { s.bolts = []; s.pools = []; s.hitT = 0; s.r.ghost = true; },
     step(s, dt) {
       const r = s.r;
@@ -357,7 +364,7 @@ Object.assign(ULT_ENG, {
         return;
       }
       r.ghost = false;
-      if (s.t < 3.4) {
+      if (s.t < ULT_ENG.plaguespray.fire) {
         // 석궁 난사: 가장 물건이 많은 쪽으로 부채꼴 연사
         if (!s.aim || Math.random() < dt * 2) s.aim = aimMost(r, 700);
         r.face = Math.cos(s.aim) >= 0 ? 1 : -1;
@@ -372,9 +379,9 @@ Object.assign(ULT_ENG, {
       for (const b of s.bolts) {
         const px = b.x, py = b.y; b.x += b.vx * dt; b.y += b.vy * dt; b.t -= dt;
         const o = { x: b.x, y: b.y, vx: b.vx, vy: b.vy }; if (confine(o, 4, px, py, 0, null)) b.t = 0;
-        for (const it of itemsIn(b.x, b.y, 18)) if (!b.hit.has(it)) { b.hit.add(it); damageItem(it, ultD(s) * 0.18, r, false, b.a); }
-        for (const h of G.humans) if (!b.hit.has(h) && !h.held && Math.hypot(h.x - b.x, h.y - b.y) < h.r + 8) { b.hit.add(h); damageHuman(h, h.boss ? ultD(s) * 0.25 : h.hpMax * 0.3, r, b.a); b.t = 0; }
-        if (G.cat && !b.hit.has(G.cat) && Math.hypot(G.cat.x - b.x, G.cat.y - b.y) < CAT_R + 8) { b.hit.add(G.cat); damageCat(G.cat, ultD(s) * 0.2, b.a, r); b.t = 0; }
+        for (const it of itemsIn(b.x, b.y, 18)) if (!b.hit.has(it)) { b.hit.add(it); damageItem(it, ultD(s) * 0.12, r, false, b.a); }
+        for (const h of G.humans) if (!b.hit.has(h) && !h.held && Math.hypot(h.x - b.x, h.y - b.y) < h.r + 8) { b.hit.add(h); damageHuman(h, h.boss ? ultD(s) * 0.17 : h.hpMax * 0.3, r, b.a); b.t = 0; }
+        if (G.cat && !b.hit.has(G.cat) && Math.hypot(G.cat.x - b.x, G.cat.y - b.y) < CAT_R + 8) { b.hit.add(G.cat); damageCat(G.cat, ultD(s) * 0.14, b.a, r); b.t = 0; }
         if (b.t <= 0) {
           // 떨어진 자리에 초록 웅덩이 (잠깐 동안 주변을 조금씩 갉음)
           if (Math.random() < 0.35) { s.pools.push({ x: b.x, y: b.y, t: 1.4 }); stampAt(b.x, b.y, m => { m.fillStyle = 'rgba(157,187,143,.45)'; m.beginPath(); m.ellipse(b.x, b.y, rand(20, 34), rand(12, 22), rand(0, 3), 0, 6.28); m.fill(); }); }
@@ -383,7 +390,7 @@ Object.assign(ULT_ENG, {
       s.bolts = s.bolts.filter(b => b.t > 0);
       for (const p of s.pools) { p.t -= dt; if ((p.tick = (p.tick || 0) - dt) <= 0) { p.tick = 0.3; aoe(p.x, p.y, 40, ultD(s) * 0.05, r); if (onScreen(p.x, p.y) && Math.random() < 0.3) particle({ x: p.x + rand(-12, 12), y: p.y, z: 4, vx: 0, vy: 0, vz: 60, life: 0.5, max: 0.5, size: 5, color: '#9dbb8f', type: 'spark', drag: 1 }); } }
       s.pools = s.pools.filter(p => p.t > 0);
-      if (s.t > 3.4) r.pose = { head: -0.3, front: 2, farFront: 0.3, tail: 1.2 };
+      if (s.t > ULT_ENG.plaguespray.fire) r.pose = { head: -0.3, front: 2, farFront: 0.3, tail: 1.2 };
     },
     end(s) { s.r.ghost = false; },
     draw(s) {
