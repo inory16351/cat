@@ -1055,7 +1055,27 @@ function clampCam() {
   G.cam.y = fit(G.cam.y, b.y0 * TILT - pad - 80, b.y1 * TILT + pad, viewH());
 }
 // 카메라는 자유롭게 (쥐들은 맵 전체로 퍼짐). 화면에 쥐가 한 마리도 없을 때만 가장 붐비는 방으로 천천히 이동
+// 필살기·슈퍼 점프 중엔 그 쥐를 화면 가운데에 두고 따라감 (쥐커드 트리플 악셀·발레리나 드릴·사무라이 돌진처럼 화면이 빨리 바뀌는 것).
+// 발동 뒤에 마우스로 화면을 움직였으면(드래그·휠) 따라가지 않음. 높이 뛰는 장면은 하늘로 끌려가지 않게 높이 제한.
+// 따라가는 동안은 맵 경계(clampCam) 무시 — 벽 너머·맵 가장자리에서도 쥐가 가운데. s = G.ult | G.sj
+function followCam(s, dt) {
+  s.camT0 ??= G.t;
+  if (G.userCamT > s.camT0) { clampCam(); return; }
+  const r = s.r, tx = r.x - viewW() / 2, ty = r.y * TILT - Math.min(r.z || 0, 120) - 20 - viewH() / 2;
+  const far = Math.hypot(tx - G.cam.x, ty - G.cam.y) > viewW() * 0.3, k = 1 - Math.exp(-dt * (far ? 26 : 14));   // 순간 돌진(사무라이)처럼 멀어지면 더 빨리 붙음
+  G.cam.x += (tx - G.cam.x) * k; G.cam.y += (ty - G.cam.y) * k;
+  G.camFreeT = G.t;
+}
 function updateCamera(dt) {
+  const U = G.ult;
+  if (U && U.phase === 'act' && U.r) return followCam(U, dt);
+  // 필살기가 끝난 직후엔 맵 안으로 확 튀지 않고 부드럽게 돌아옴
+  if (G.t - (G.camFreeT ?? -99) < 1.5) {
+    const x = G.cam.x, y = G.cam.y; clampCam(); const cx = G.cam.x, cy = G.cam.y, k = 1 - Math.exp(-dt * 5);
+    G.cam.x = x + (cx - x) * k; G.cam.y = y + (cy - y) * k;
+    if (G.t - G.userCamT < 0.05) clampCam();   // 그 사이 직접 움직이면 바로 경계 안으로
+    return;
+  }
   if (G.t - G.userCamT > 8 && G.rats.length && !G.rats.some(r => onScreen(r.x, r.y, -40))) {
     const cnt = {}; let best = null;
     for (const r of G.rats) { const k = rk(...roomOf(r.x, r.y)); cnt[k] = (cnt[k] || 0) + 1; if (!best || cnt[k] > cnt[best]) best = k; }

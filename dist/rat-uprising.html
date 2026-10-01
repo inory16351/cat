@@ -3856,7 +3856,27 @@ function clampCam() {
   G.cam.y = fit(G.cam.y, b.y0 * TILT - pad - 80, b.y1 * TILT + pad, viewH());
 }
 // 카메라는 자유롭게 (쥐들은 맵 전체로 퍼짐). 화면에 쥐가 한 마리도 없을 때만 가장 붐비는 방으로 천천히 이동
+// 필살기·슈퍼 점프 중엔 그 쥐를 화면 가운데에 두고 따라감 (쥐커드 트리플 악셀·발레리나 드릴·사무라이 돌진처럼 화면이 빨리 바뀌는 것).
+// 발동 뒤에 마우스로 화면을 움직였으면(드래그·휠) 따라가지 않음. 높이 뛰는 장면은 하늘로 끌려가지 않게 높이 제한.
+// 따라가는 동안은 맵 경계(clampCam) 무시 — 벽 너머·맵 가장자리에서도 쥐가 가운데. s = G.ult | G.sj
+function followCam(s, dt) {
+  s.camT0 ??= G.t;
+  if (G.userCamT > s.camT0) { clampCam(); return; }
+  const r = s.r, tx = r.x - viewW() / 2, ty = r.y * TILT - Math.min(r.z || 0, 120) - 20 - viewH() / 2;
+  const far = Math.hypot(tx - G.cam.x, ty - G.cam.y) > viewW() * 0.3, k = 1 - Math.exp(-dt * (far ? 26 : 14));   // 순간 돌진(사무라이)처럼 멀어지면 더 빨리 붙음
+  G.cam.x += (tx - G.cam.x) * k; G.cam.y += (ty - G.cam.y) * k;
+  G.camFreeT = G.t;
+}
 function updateCamera(dt) {
+  const U = G.ult;
+  if (U && U.phase === 'act' && U.r) return followCam(U, dt);
+  // 필살기가 끝난 직후엔 맵 안으로 확 튀지 않고 부드럽게 돌아옴
+  if (G.t - (G.camFreeT ?? -99) < 1.5) {
+    const x = G.cam.x, y = G.cam.y; clampCam(); const cx = G.cam.x, cy = G.cam.y, k = 1 - Math.exp(-dt * 5);
+    G.cam.x = x + (cx - x) * k; G.cam.y = y + (cy - y) * k;
+    if (G.t - G.userCamT < 0.05) clampCam();   // 그 사이 직접 움직이면 바로 경계 안으로
+    return;
+  }
   if (G.t - G.userCamT > 8 && G.rats.length && !G.rats.some(r => onScreen(r.x, r.y, -40))) {
     const cnt = {}; let best = null;
     for (const r of G.rats) { const k = rk(...roomOf(r.x, r.y)); cnt[k] = (cnt[k] || 0) + 1; if (!best || cnt[k] > cnt[best]) best = k; }
@@ -5559,7 +5579,7 @@ function drawCat(c) {
 // → ⑤ 화면 속 쥐·물건이 전부 둥실 → ⑥ 물건·벽 한꺼번에 박살 → ⑦ 쥐들 착지, 게임 재개
 const SJ_T = { cutin: 1.9, charge: 1.5, launch: 0.35, sky: 1.3, fall: 0.38, float: 1.5, drop: 1 };
 const SJ_CHANCE = 1 / 480;      // 화면에 쥐가 있을 때 초당 확률 (평균 8분에 한 번)
-const SJ_ITEM = 15;             // 슈퍼 점프 피해 = 쥐 공격력 × 15 (화면 속 물건 전부에. 사람·고양이는 ×2)
+const SJ_ITEM = 15;             // 슈퍼 점프 피해 = 쥐 공격력 × 15 — 단 화면 속 물건·사람·고양이는 체력과 상관없이 전부 박살 (sjBoom)
 const SJ_COOL = 120;            // 한 번 터지면 최소 2분은 쉼 (첫 발동도 시작 1분 뒤부터)
 const sjEase = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 
@@ -5574,8 +5594,8 @@ function startSuperJump(forced) {
   const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT;
   const pool = G.rats.filter(r => onScreen(r.x, r.y, -80)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
   if (!pool.length) return false;
-  // 화면 가운데 쪽 쥐 중에서 (강제 발동은 가장 가운데 쥐)
-  const r = forced ? pool[0] : pick(pool.slice(0, Math.max(1, Math.ceil(pool.length / 3))));
+  // 화면 가운데 쪽 쥐 중에서. 테스트 버튼(강제)은 가장자리 쪽 쥐 — 카메라가 그 쥐를 가운데로 데려오는 걸 확인할 수 있게
+  const r = forced ? pick(pool.slice(Math.floor(pool.length / 2))) : pick(pool.slice(0, Math.max(1, Math.ceil(pool.length / 3))));
   r.trick = null; r.sleep = 0; r.vx = r.vy = r.vz = 0; r.z = 0; r.rushT = 0; r.bite = 0; r.speed = 0;
   for (const o of G.rats) if (o.act) endAct(o);
   G.bullets = [];
@@ -5589,6 +5609,7 @@ function sjPhase(s, ph) { s.phase = ph; s.t = 0; }
 function updateSuperJump(dt) {
   const s = G.sj, r = s.r;
   G.t += dt; s.t += dt;
+  followCam(s, dt);                      // 그 쥐를 화면 가운데로 (game.js)
   const k = s.t / SJ_T[s.phase];
   switch (s.phase) {
     case 'cutin':
@@ -5714,15 +5735,15 @@ function sjBoom(s) {
   sjPhase(s, 'drop'); s.boom2T = G.t;
   G.quiet = true;
   let n = 0;
-  // 화면 속 물건: 슈퍼 점프 피해(쥐 공격력 × SJ_ITEM) — 체력이 남은 건 튕겨 나갔다 착지
+  // 화면 속 물건: 아주 드물게 터지는 만큼 남은 체력과 상관없이 전부 박살 (도파민, 사용자). 피해 = 남은 체력 + 쥐 공격력 × SJ_ITEM (치즈·기록용)
   const sjD = ratDamage(s.r) * SJ_ITEM;
-  for (const f of s.items) { const it = f.it; it.air = Math.max(it.air, 2); it.crit = true; if (skillBlastItem(it, sjD, s.r, rand(0, 6.28), 260, 520)) n++; }
+  for (const f of s.items) { const it = f.it; it.air = Math.max(it.air, 2); it.crit = true; if (skillBlastItem(it, Math.max(sjD, (it.hp || 0) + (it.hpMax || 0)), s.r, rand(0, 6.28), 260, 520)) n++; }
   G.quiet = false;
   G.items = G.items.filter(it => it.state !== 'dead');
-  // 화면 안 사람은 전부 하늘로, 고양이는 퇴치, 보스는 최대 체력의 20%
+  // 화면 안 사람은 체력과 상관없이 전부 하늘 끝까지, 고양이는 바로 퇴치, 보스는 최대 체력의 20% (보스전은 쥐들이 직접)
   const vr = viewRect(0);
-  for (const h of [...G.humans]) if (inRect(h.x, h.y, vr)) { if (h.boss) damageHuman(h, h.hpMax * 0.2, s.r, 0); else if (blastActor(h, rand(0, 6.28), rand(300, 520), sjD * 2, s.r) && h.hp <= 0) h.vz = rand(900, 1200); }
-  if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, sjD * 2, rand(0, 6.28), s.r);
+  for (const h of [...G.humans]) if (inRect(h.x, h.y, vr)) { if (h.boss) damageHuman(h, h.hpMax * 0.2, s.r, 0); else if (blastActor(h, rand(0, 6.28), rand(300, 520), Math.max(sjD * 2, (h.hp || 0) + 1), s.r)) h.vz = rand(900, 1200); }
+  if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, Math.max(sjD * 2, (G.cat.hp || 0) + 1), rand(0, 6.28), s.r);
   const nw = s.walls.length;
   // 계단 방 벽은 한 방에 안 무너짐 (최대 체력의 25%만): 층 넘어가기는 쥐들이 직접 해내야 함
   for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy); else breakWall(w.i, w.j, w.di, w.dj); }
@@ -6355,9 +6376,12 @@ function testUlt(idx) {
   const u = ULT_LIST[G.ultTest];
   let r = G.rats.find(o => o.sp.id === u.id && !o.ultOn && onScreen(o.x, o.y, -80));
   if (!r) {
-    const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT;
-    r = makeRat(u.id, cx, cy); r.temp = 15; r.noBreed = 99; r.breedCD = 99; r.born = 1;
-    confine(r, ratR(r), cx, cy, 0, null);
+    // 화면 가장자리 쪽 무작위 위치에 불러옴 (가운데면 카메라 따라가기가 티가 안 남). 그 자리가 막힌 방이면 화면 가운데
+    const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT, a = rand(0, 6.28);
+    let x = cx + Math.cos(a) * viewW() * 0.32, y = cy + Math.sin(a) * viewH() * 0.3 / TILT;
+    if (!isOpen(...roomOf(x, y))) { x = cx; y = cy; }
+    r = makeRat(u.id, x, y); r.temp = 15; r.noBreed = 99; r.breedCD = 99; r.born = 1;
+    confine(r, ratR(r), x, y, 0, null);
     G.rats.push(r); smoke(r.x, r.y);
   }
   return startUlt(r);
@@ -8263,15 +8287,12 @@ Object.assign(ULT_ENG, {
   thankyou: {
     dur: 11.7,
     pre(s) { s.title = '🎩 줴리 감사합니다'; },
+    // 줴리 행동을 설명하는 내레이션 자막('계란을 맞으면서 인사가 빨라진다' 등)은 어색해서 뺌. 반응 자막 '(갑분싸)'·'(…인정이지)'는 유지 (사용자)
     beats: [
-      [0.05, s => ucap(s, '(줴리가 뭔가 엄청난 걸 준비한다…)', { size: 30 })],
-      [2.3, s => ucap(s, '(…99%에서 안 올라간다)', { size: 30, col: '#dfefff' })],
-      [3.35, s => ucap(s, '(다시 기를 모은다!!!)', { size: 34, col: '#fff3bf' })],
       [5.75, s => ucap(s, '(갑분싸)', { size: 34, col: '#c8c3d0' })],
       [6.7, s => ucap(s, '우우우~~ 나가라!!', { size: 56, col: '#e8786a', y: 0.45, dur: 1 })],
       [7.25, s => ucap(s, '감사합니다.', { size: 64, col: '#f2c14e', y: 0.45, dur: 1.1 })],
       [8.4, s => ucap(s, '감사합니다. 감사합니다.', { size: 40, col: '#fff3bf' })],
-      [9.3, s => ucap(s, '(계란을 맞으면서 인사가 빨라진다)', { size: 30 })],
       [10.35, s => ucap(s, '감사합니다!!!', { size: 72, col: '#f2c14e', y: 0.45, dur: 0.9 })],
       [10.9, s => ucap(s, '(…인정이지)', { size: 32, col: '#fff3bf' })],
     ],

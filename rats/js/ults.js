@@ -22,9 +22,12 @@ function testUlt(idx) {
   const u = ULT_LIST[G.ultTest];
   let r = G.rats.find(o => o.sp.id === u.id && !o.ultOn && onScreen(o.x, o.y, -80));
   if (!r) {
-    const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT;
-    r = makeRat(u.id, cx, cy); r.temp = 15; r.noBreed = 99; r.breedCD = 99; r.born = 1;
-    confine(r, ratR(r), cx, cy, 0, null);
+    // 화면 가장자리 쪽 무작위 위치에 불러옴 (가운데면 카메라 따라가기가 티가 안 남). 그 자리가 막힌 방이면 화면 가운데
+    const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT, a = rand(0, 6.28);
+    let x = cx + Math.cos(a) * viewW() * 0.32, y = cy + Math.sin(a) * viewH() * 0.3 / TILT;
+    if (!isOpen(...roomOf(x, y))) { x = cx; y = cy; }
+    r = makeRat(u.id, x, y); r.temp = 15; r.noBreed = 99; r.breedCD = 99; r.born = 1;
+    confine(r, ratR(r), x, y, 0, null);
     G.rats.push(r); smoke(r.x, r.y);
   }
   return startUlt(r);

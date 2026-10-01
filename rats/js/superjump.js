@@ -5,7 +5,7 @@
 // → ⑤ 화면 속 쥐·물건이 전부 둥실 → ⑥ 물건·벽 한꺼번에 박살 → ⑦ 쥐들 착지, 게임 재개
 const SJ_T = { cutin: 1.9, charge: 1.5, launch: 0.35, sky: 1.3, fall: 0.38, float: 1.5, drop: 1 };
 const SJ_CHANCE = 1 / 480;      // 화면에 쥐가 있을 때 초당 확률 (평균 8분에 한 번)
-const SJ_ITEM = 15;             // 슈퍼 점프 피해 = 쥐 공격력 × 15 (화면 속 물건 전부에. 사람·고양이는 ×2)
+const SJ_ITEM = 15;             // 슈퍼 점프 피해 = 쥐 공격력 × 15 — 단 화면 속 물건·사람·고양이는 체력과 상관없이 전부 박살 (sjBoom)
 const SJ_COOL = 120;            // 한 번 터지면 최소 2분은 쉼 (첫 발동도 시작 1분 뒤부터)
 const sjEase = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 
@@ -20,8 +20,8 @@ function startSuperJump(forced) {
   const cx = G.cam.x + viewW() / 2, cy = (G.cam.y + viewH() / 2) / TILT;
   const pool = G.rats.filter(r => onScreen(r.x, r.y, -80)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
   if (!pool.length) return false;
-  // 화면 가운데 쪽 쥐 중에서 (강제 발동은 가장 가운데 쥐)
-  const r = forced ? pool[0] : pick(pool.slice(0, Math.max(1, Math.ceil(pool.length / 3))));
+  // 화면 가운데 쪽 쥐 중에서. 테스트 버튼(강제)은 가장자리 쪽 쥐 — 카메라가 그 쥐를 가운데로 데려오는 걸 확인할 수 있게
+  const r = forced ? pick(pool.slice(Math.floor(pool.length / 2))) : pick(pool.slice(0, Math.max(1, Math.ceil(pool.length / 3))));
   r.trick = null; r.sleep = 0; r.vx = r.vy = r.vz = 0; r.z = 0; r.rushT = 0; r.bite = 0; r.speed = 0;
   for (const o of G.rats) if (o.act) endAct(o);
   G.bullets = [];
@@ -35,6 +35,7 @@ function sjPhase(s, ph) { s.phase = ph; s.t = 0; }
 function updateSuperJump(dt) {
   const s = G.sj, r = s.r;
   G.t += dt; s.t += dt;
+  followCam(s, dt);                      // 그 쥐를 화면 가운데로 (game.js)
   const k = s.t / SJ_T[s.phase];
   switch (s.phase) {
     case 'cutin':
@@ -160,15 +161,15 @@ function sjBoom(s) {
   sjPhase(s, 'drop'); s.boom2T = G.t;
   G.quiet = true;
   let n = 0;
-  // 화면 속 물건: 슈퍼 점프 피해(쥐 공격력 × SJ_ITEM) — 체력이 남은 건 튕겨 나갔다 착지
+  // 화면 속 물건: 아주 드물게 터지는 만큼 남은 체력과 상관없이 전부 박살 (도파민, 사용자). 피해 = 남은 체력 + 쥐 공격력 × SJ_ITEM (치즈·기록용)
   const sjD = ratDamage(s.r) * SJ_ITEM;
-  for (const f of s.items) { const it = f.it; it.air = Math.max(it.air, 2); it.crit = true; if (skillBlastItem(it, sjD, s.r, rand(0, 6.28), 260, 520)) n++; }
+  for (const f of s.items) { const it = f.it; it.air = Math.max(it.air, 2); it.crit = true; if (skillBlastItem(it, Math.max(sjD, (it.hp || 0) + (it.hpMax || 0)), s.r, rand(0, 6.28), 260, 520)) n++; }
   G.quiet = false;
   G.items = G.items.filter(it => it.state !== 'dead');
-  // 화면 안 사람은 전부 하늘로, 고양이는 퇴치, 보스는 최대 체력의 20%
+  // 화면 안 사람은 체력과 상관없이 전부 하늘 끝까지, 고양이는 바로 퇴치, 보스는 최대 체력의 20% (보스전은 쥐들이 직접)
   const vr = viewRect(0);
-  for (const h of [...G.humans]) if (inRect(h.x, h.y, vr)) { if (h.boss) damageHuman(h, h.hpMax * 0.2, s.r, 0); else if (blastActor(h, rand(0, 6.28), rand(300, 520), sjD * 2, s.r) && h.hp <= 0) h.vz = rand(900, 1200); }
-  if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, sjD * 2, rand(0, 6.28), s.r);
+  for (const h of [...G.humans]) if (inRect(h.x, h.y, vr)) { if (h.boss) damageHuman(h, h.hpMax * 0.2, s.r, 0); else if (blastActor(h, rand(0, 6.28), rand(300, 520), Math.max(sjD * 2, (h.hp || 0) + 1), s.r)) h.vz = rand(900, 1200); }
+  if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, Math.max(sjD * 2, (G.cat.hp || 0) + 1), rand(0, 6.28), s.r);
   const nw = s.walls.length;
   // 계단 방 벽은 한 방에 안 무너짐 (최대 체력의 25%만): 층 넘어가기는 쥐들이 직접 해내야 함
   for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy); else breakWall(w.i, w.j, w.di, w.dj); }
