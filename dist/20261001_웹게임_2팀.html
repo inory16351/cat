@@ -2947,13 +2947,13 @@ const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const openRooms = () => [...OPEN].map(k => k.split(',').map(Number));
 // 벽 키: v,i,j = x=i*RW 의 세로 벽(j행) / h,i,j = y=j*RH 의 가로 벽(i열)
 const wallKey = (i, j, di, dj) => (di ? `v,${i + (di > 0 ? 1 : 0)},${j}` : `h,${i},${j + (dj > 0 ? 1 : 0)}`);
-// 벽 체력 = max(예전 공식, 층별 적정 전투력 powNeed × 배율). 예전 공식만으로는 적정 전투력에 한참 못 미쳐도 계단 방 벽이 금방 뚫렸음 (사용자)
+// 벽 체력 = 층별 적정 전투력 powNeed × 배율. 예전 공식(wallBase)만으로는 적정 전투력에 한참 못 미쳐도 계단 방 벽이 금방 뚫렸음 (사용자)
 //   계단 방 벽(층 넘어가기 관문) ×WALL_POW_STAIRS: 적정 전투력이면 무리가 모여 40초쯤, 모자라면 강화해야 뚫림 / 일반 벽 ×WALL_POW × 거리 보정
 const WALL_POW_STAIRS = 20, WALL_POW = 1.5;
+// (예전 공식 wallBase ×4.6/층 과 max 를 했더니 높은 층에선 예전 공식이 다시 이겨 가혹해져서 적정 기준만 씀)
 function wallMax(ti, tj) {
-  if (isStairsRoom(ti, tj)) return Math.max(wallBase(S.floor) * 3, powNeed(S.floor) * WALL_POW_STAIRS);
-  const d = 1 + 0.25 * roomDist(ti, tj);
-  return Math.max(wallBase(S.floor), powNeed(S.floor) * WALL_POW) * d;
+  if (isStairsRoom(ti, tj)) return powNeed(S.floor) * WALL_POW_STAIRS;
+  return powNeed(S.floor) * WALL_POW * (1 + 0.25 * roomDist(ti, tj));
 }
 function wallHP(i, j, di, dj) { return S.walls[wallKey(i, j, di, dj)] ?? wallMax(i + di, j + dj); }
 function layoutBounds() {
@@ -3520,8 +3520,19 @@ function hitWall(r, i, j, di, dj) {
   actTrigger(r, 'wall');
   damageWall(i, j, di, dj, ratDamage(r) * digMult() * (abIs(r, 'wall') ? 1 + 2 * abP(r.sp) : 1) * (G.rush && r.rushT > 0 ? rushMult() : 1), r.x, r.y);
 }
-function damageWall(i, j, di, dj, dmg, x, y) {
+// 찍찍!!(전투력) 이 층별 적정에 못 미치면 벽에 이빨이 안 박힘 (사용자: 적정에 택도 없는데 벽이 쉽게 뚫림).
+// 찍찍!!은 공격력 합이라 굴착 본능·총공격(클릭) 연타·벽 특기 배율이 안 잡혀서, 약한 무리도 클릭으로 몰아치면 뚫었음.
+// 배율 = (찍찍!! ÷ 적정)^지수: 계단 방 벽 ^1.5 (4%면 사실상 불가, 50%면 0.35배) · 일반 벽 ^0.5 (파밍용 방 넓히기는 느리게라도 됨)
+const WALL_GATE_STAIRS = 1.5, WALL_GATE = 0.5;
+function wallGate(ti, tj) {
+  const k = clamp((G.power || 0) / powNeed(S.floor), 0.001, 1);
+  return Math.pow(k, isStairsRoom(ti, tj) ? WALL_GATE_STAIRS : WALL_GATE);
+}
+function damageWall(i, j, di, dj, dmg, x, y, noGate) {
   if (!inLayout(i + di, j + dj)) return;                  // 연구소 바깥벽은 못 부숨
+  const gate = noGate ? 1 : wallGate(i + di, j + dj);
+  dmg *= gate;
+  if (gate < 0.3 && onScreen(x, y) && Math.random() < 0.04) popup(x, y, pick(['단단하다!', '안 박혀…', '찍찍!! 부족']), '#c8c3d0', 15, 0.7, 40);
   const k = wallKey(i, j, di, dj), hp = wallHP(i, j, di, dj) - dmg;
   S.walls[k] = hp;
   G.wallShake[k] = Math.min(1, (G.wallShake[k] || 0) + 0.15);
@@ -4407,7 +4418,9 @@ const wallBase = f => 1000 * Math.pow(WALL_GROW, f - 1);
 const BOSS_HP0 = 2.5e7, BOSS_GROW = 2.8;
 const bossHP = f => BOSS_HP0 * Math.pow(BOSS_GROW, f - BOSS_EVERY);
 // 층별 적정 전투력(찍찍!!) = 이 정도는 있어야 계단 벽을 뚫음. 밸런스 시뮬(dev/sim_browser.js)에서 층을 깬 순간의 전투력에 맞춘 곡선
-const POW_NEED0 = 2000, POW_NEED_GROW = 4;   // 시뮬 2회: 층을 깬 순간 전투력 ≈ 이 값의 1~2배
+// 층별 적정 찍찍!! = POW_NEED0 × POW_NEED_GROW^(층-1). 벽 체력·벽 게이트(game.js wallGate)·고양이 체력이 전부 이 값 기준.
+// ×4 는 가혹했음(사용자): 시뮬 25분에 무리 전투력은 층마다 ≈×3.5 늘지만 층당 시간이 1→4분으로 늘어 9층에서 적정의 35~75%에 막힘 → ×3.3
+const POW_NEED0 = 2000, POW_NEED_GROW = 3.3;
 const powNeed = f => POW_NEED0 * Math.pow(POW_NEED_GROW, f - 1);
 
 // ── 층 들어가기 ──
@@ -5753,7 +5766,7 @@ function sjBoom(s) {
   if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, Math.max(sjD * 2, (G.cat.hp || 0) + 1), rand(0, 6.28), s.r);
   const nw = s.walls.length;
   // 계단 방 벽은 한 방에 안 무너짐 (최대 체력의 25%만): 층 넘어가기는 쥐들이 직접 해내야 함
-  for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy); else breakWall(w.i, w.j, w.di, w.dj); }
+  for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy, true); else breakWall(w.i, w.j, w.di, w.dj); }
   G.hitstop = 0;
   for (const w of s.walls) delete G.wallShake[w.key];
   s.walls = [];
