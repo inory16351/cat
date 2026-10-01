@@ -172,7 +172,7 @@ function sjBoom(s) {
   if (G.cat && inRect(G.cat.x, G.cat.y, vr) && G.cat.state !== 'flung' && G.cat.state !== 'leave') damageCat(G.cat, Math.max(sjD * 2, (G.cat.hp || 0) + 1), rand(0, 6.28), s.r);
   const nw = s.walls.length;
   // 계단 방 벽은 한 방에 안 무너짐 (최대 체력의 25%만): 층 넘어가기는 쥐들이 직접 해내야 함
-  for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy); else breakWall(w.i, w.j, w.di, w.dj); }
+  for (const w of s.walls) { if (isStairsRoom(w.i + w.di, w.j + w.dj)) damageWall(w.i, w.j, w.di, w.dj, wallMax(w.i + w.di, w.j + w.dj) * 0.25, w.cx, w.cy, true); else breakWall(w.i, w.j, w.di, w.dj); }
   G.hitstop = 0;
   for (const w of s.walls) delete G.wallShake[w.key];
   s.walls = [];

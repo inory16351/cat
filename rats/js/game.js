@@ -146,7 +146,14 @@ const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const openRooms = () => [...OPEN].map(k => k.split(',').map(Number));
 // 벽 키: v,i,j = x=i*RW 의 세로 벽(j행) / h,i,j = y=j*RH 의 가로 벽(i열)
 const wallKey = (i, j, di, dj) => (di ? `v,${i + (di > 0 ? 1 : 0)},${j}` : `h,${i},${j + (dj > 0 ? 1 : 0)}`);
-function wallMax(ti, tj) { return wallBase(S.floor) * (isStairsRoom(ti, tj) ? 3 : 1 + 0.25 * roomDist(ti, tj)); }   // 계단 방 벽은 3배
+// 벽 체력 = 층별 적정 전투력 powNeed × 배율. 예전 공식(wallBase)만으로는 적정 전투력에 한참 못 미쳐도 계단 방 벽이 금방 뚫렸음 (사용자)
+//   계단 방 벽(층 넘어가기 관문) ×WALL_POW_STAIRS: 적정 전투력이면 무리가 모여 40초쯤, 모자라면 강화해야 뚫림 / 일반 벽 ×WALL_POW × 거리 보정
+const WALL_POW_STAIRS = 20, WALL_POW = 1.5;
+// (예전 공식 wallBase ×4.6/층 과 max 를 했더니 높은 층에선 예전 공식이 다시 이겨 가혹해져서 적정 기준만 씀)
+function wallMax(ti, tj) {
+  if (isStairsRoom(ti, tj)) return powNeed(S.floor) * WALL_POW_STAIRS;
+  return powNeed(S.floor) * WALL_POW * (1 + 0.25 * roomDist(ti, tj));
+}
 function wallHP(i, j, di, dj) { return S.walls[wallKey(i, j, di, dj)] ?? wallMax(i + di, j + dj); }
 function layoutBounds() {
   let i0 = 1e9, j0 = 1e9, i1 = -1e9, j1 = -1e9;
@@ -712,8 +719,19 @@ function hitWall(r, i, j, di, dj) {
   actTrigger(r, 'wall');
   damageWall(i, j, di, dj, ratDamage(r) * digMult() * (abIs(r, 'wall') ? 1 + 2 * abP(r.sp) : 1) * (G.rush && r.rushT > 0 ? rushMult() : 1), r.x, r.y);
 }
-function damageWall(i, j, di, dj, dmg, x, y) {
+// 찍찍!!(전투력) 이 층별 적정에 못 미치면 벽에 이빨이 안 박힘 (사용자: 적정에 택도 없는데 벽이 쉽게 뚫림).
+// 찍찍!!은 공격력 합이라 굴착 본능·총공격(클릭) 연타·벽 특기 배율이 안 잡혀서, 약한 무리도 클릭으로 몰아치면 뚫었음.
+// 배율 = (찍찍!! ÷ 적정)^지수: 계단 방 벽 ^1.5 (4%면 사실상 불가, 50%면 0.35배) · 일반 벽 ^0.5 (파밍용 방 넓히기는 느리게라도 됨)
+const WALL_GATE_STAIRS = 1.5, WALL_GATE = 0.5;
+function wallGate(ti, tj) {
+  const k = clamp((G.power || 0) / powNeed(S.floor), 0.001, 1);
+  return Math.pow(k, isStairsRoom(ti, tj) ? WALL_GATE_STAIRS : WALL_GATE);
+}
+function damageWall(i, j, di, dj, dmg, x, y, noGate) {
   if (!inLayout(i + di, j + dj)) return;                  // 연구소 바깥벽은 못 부숨
+  const gate = noGate ? 1 : wallGate(i + di, j + dj);
+  dmg *= gate;
+  if (gate < 0.3 && onScreen(x, y) && Math.random() < 0.04) popup(x, y, pick(['단단하다!', '안 박혀…', '찍찍!! 부족']), '#c8c3d0', 15, 0.7, 40);
   const k = wallKey(i, j, di, dj), hp = wallHP(i, j, di, dj) - dmg;
   S.walls[k] = hp;
   G.wallShake[k] = Math.min(1, (G.wallShake[k] || 0) + 0.15);
@@ -899,10 +917,10 @@ const FLY_W = 0.35, FLY_MULT = 3, FLY_STYLE = 0.35;
 const avgRatDmg = () => (G.power && G.rats.length ? G.power / G.rats.length : 10);
 const trickPts = r => (r && r.trick && TRICKS[r.trick.type].pts) || 0;
 const flyStyle = o => 1 + FLY_STYLE * (Math.min(o.air || 0, AIR_MAX) + (o.style || 0));
-function flyDmg(o) {
-  const weight = (o.hpMax || 0) * FLY_W;
-  const force = (o.by && o.by.sp ? ratDamage(o.by) : avgRatDmg()) * FLY_MULT * clamp(Math.hypot(o.vx, o.vy) / 600, 0.6, 1.4) * (o.kp || 1);
-  return (weight + force) * flyStyle(o) * (o.crit ? 2 : 1);
+function flyForce(o) { return (o.by && o.by.sp ? ratDamage(o.by) : avgRatDmg()) * FLY_MULT * clamp(Math.hypot(o.vx, o.vy) / 600, 0.6, 1.4) * (o.kp || 1); }
+function flyDmg(o, noWeight) {
+  const weight = noWeight ? 0 : (o.hpMax || 0) * FLY_W;      // 벽에 박힐 땐 무게 제외 (무게는 층마다 커지고 쥐 힘과 무관 → 약한 무리도 벽을 뚫었음)
+  return (weight + flyForce(o)) * flyStyle(o) * (o.crit ? 2 : 1);
 }
 // ── 특수 스킬(필살기·슈퍼 점프) 타격: 무조건 박살이 아니라 데미지 공식 ──
 // 체력이 0 이 되면 예전처럼 날아가 박살, 남으면 날아갔다가 멀쩡히 착지(it.survive → landItem) + HP 바
@@ -948,7 +966,7 @@ function updateItems(dt) {
     const px = it.x, py = it.y;
     it.vz -= GZ * dt; it.x += it.vx * dt; it.y += it.vy * dt; it.z += it.vz * dt; it.rot += it.vr * dt;
     // 날아간 물건이 막힌 벽을 때리면 벽도 깎임
-    confine(it, it.r * 0.7, px, py, 0.6, (i, j, di, dj, v) => { if (it.z < 140 && v > 100) damageWall(i, j, di, dj, flyDmg(it) * 0.3 * digMult(), it.x, it.y); });   // 날아간 물건이 벽에 쾅: 쥐 한 번 갉는 정도
+    confine(it, it.r * 0.7, px, py, 0.6, (i, j, di, dj, v) => { if (it.z < 140 && v > 100) damageWall(i, j, di, dj, flyDmg(it, true) * 0.3 * digMult(), it.x, it.y); });   // 날아간 물건이 벽에 쾅: 쥐가 준 힘만 (무게 제외)
     if (onScreen(it.x, it.y) && Math.random() < 0.4) particle({ x: it.x, y: it.y, z: it.z, vx: 0, vy: 0, life: 0.2, max: 0.2, size: it.r * 0.5, color: it.crit ? '#e6a85a' : 'rgba(255,255,255,.8)', type: 'trail', drag: 0 });
     const sp = Math.hypot(it.vx, it.vy);
     if (sp > 150 && it.z < 60) near(itemGrid, it.x, it.y, o => {

@@ -188,7 +188,7 @@ function flyStep(h, dt) {
   const px = h.x, py = h.y;
   h.fly.t += dt;
   h.vz -= 1500 * dt; h.x += h.vx * dt; h.y += h.vy * dt; h.z += h.vz * dt; h.rot += h.vr * dt;
-  const hitWall = confine(h, h.r * 0.8, px, py, 0.3, (i, j, di, dj, v) => { if (v > 250) damageWall(i, j, di, dj, flyDmg(h) * 0.5 * digMult(), h.x, h.y); });   // 날아간 사람 벽 쾅: 날린 쥐 공격력 기준
+  const hitWall = confine(h, h.r * 0.8, px, py, 0.3, (i, j, di, dj, v) => { if (v > 250) damageWall(i, j, di, dj, flyDmg(h, true) * 0.5 * digMult(), h.x, h.y); });   // 날아간 사람 벽 쾅: 날린 쥐 공격력 기준 (무게 제외)
   if (hitWall && h.z > 30 && Math.hypot(h.vx, h.vy) > 200 && !h.splatted) {
     // 벽에 철퍼덕! (한 번만)
     h.splatted = true; h.state = 'splat'; h.t = 0.7; h.rot = 0; h.face = -h.face; h.sq = 0.7;

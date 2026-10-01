@@ -34,7 +34,9 @@ const wallBase = f => 1000 * Math.pow(WALL_GROW, f - 1);
 const BOSS_HP0 = 2.5e7, BOSS_GROW = 2.8;
 const bossHP = f => BOSS_HP0 * Math.pow(BOSS_GROW, f - BOSS_EVERY);
 // 층별 적정 전투력(찍찍!!) = 이 정도는 있어야 계단 벽을 뚫음. 밸런스 시뮬(dev/sim_browser.js)에서 층을 깬 순간의 전투력에 맞춘 곡선
-const POW_NEED0 = 2000, POW_NEED_GROW = 4;   // 시뮬 2회: 층을 깬 순간 전투력 ≈ 이 값의 1~2배
+// 층별 적정 찍찍!! = POW_NEED0 × POW_NEED_GROW^(층-1). 벽 체력·벽 게이트(game.js wallGate)·고양이 체력이 전부 이 값 기준.
+// ×4 는 가혹했음(사용자): 시뮬 25분에 무리 전투력은 층마다 ≈×3.5 늘지만 층당 시간이 1→4분으로 늘어 9층에서 적정의 35~75%에 막힘 → ×3.3
+const POW_NEED0 = 2000, POW_NEED_GROW = 3.3;
 const powNeed = f => POW_NEED0 * Math.pow(POW_NEED_GROW, f - 1);
 
 // ── 층 들어가기 ──
