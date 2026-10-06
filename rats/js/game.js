@@ -47,6 +47,8 @@ const S = {
   herd: ['brownrat', 'mouse', 'labrat'], seen: { brownrat: true, mouse: true, labrat: true }, fresh: {},
   births: 0, smashed: 0, lastSeen: Date.now(), ips: 0, muted: false, started: false,
   floor: 1, maxFloor: 1, shard: {}, bossFail: 0, bossBeat: {},
+  // 로그라이크 (meta.js): 티어·연구자료·쥐 강화 레벨(rlv)은 계속 유지 / 판(run) 상태는 게임 오버 때 초기화
+  rank: 1, research: 0, rlv: null, inRun: false, timeLeft: 0, runResearch: 0, runs: 0,
 };
 let resetting = false;
 function loadSave() {
@@ -63,6 +65,11 @@ function loadSave() {
   // 연구소 탈출(층) 이전의 저장: 도시 구역 기록은 버리고 1층부터, 치즈로 찍었던 종별 스킬은 같은 레벨의 조각으로 환산
   if (s && !s.floor) { S.floor = 1; S.maxFloor = 1; S.open = ['0,0']; S.walls = {}; }
   if (s && !s.shard) for (const [id, t] of Object.entries(S.rsk)) { const sp = RSPECIES_BY_ID[id]; if (sp) S.shard[id] = shardsFor(sp.tier, Object.values(t).reduce((a, b) => a + b, 0)); }
+  if (!S.rlv) {
+    S.rlv = {};
+    for (const [id, n] of Object.entries(S.shard)) { const sp = RSPECIES_BY_ID[id]; if (!sp) continue; let L = 0, used = 0; while (L < RAT_MAX_LV && used + shardNeed(sp.tier, L) <= n) { used += shardNeed(sp.tier, L); L++; } S.rlv[id] = L; }
+    if (s && s.started) { S.inRun = true; S.timeLeft = 0; }        // 개편 전부터 진행 중이던 판은 이어서 (제한시간은 initWorld 에서 채움)
+  }
   for (const id of Object.keys(S.seen)) if (RSPECIES_BY_ID[id]) applyShards(id);
   OPEN = new Set(S.open);
   if (!S.skills.core && Object.values(S.skills).some(v => v > 0)) S.skills.core = 1;
@@ -78,20 +85,19 @@ function writeSave() {
 const lv = id => S.skills[id] || 0;
 const rsl = (id, k) => (S.rsk[id] && S.rsk[id][k]) || 0;            // 종별 스킬 레벨
 function ratSkillCost(s, id, l = rsl(id, s.id)) { return Math.ceil(s.base * TIERS[RSPECIES_BY_ID[id].tier].cost * Math.pow(s.grow, l)); }
-// 조각: 같은 종을 또 얻으면 +1 → 레벨 업 시 종별 트리 자동 (data.js autoTree)
+// 조각: 같은 종을 또 얻으면 +1. 강화는 아웃게임(로비)에서 조각을 써서 (meta.js upgradeRat·upgradeAllRats, lobby.js) — 인게임에선 승급만
+// L = 강화한 레벨(S.rlv), have = 다음 레벨까지 모인 조각, need = 다음 레벨에 필요한 조각
 const shardsFor = (tier, L) => { let n = 0; for (let l = 0; l < L; l++) n += shardNeed(tier, l); return n; };
 function shardLevel(id) {
-  const sp = RSPECIES_BY_ID[id], n = S.shard[id] || 0; let L = 0, used = 0;
-  while (L < RAT_MAX_LV && used + shardNeed(sp.tier, L) <= n) { used += shardNeed(sp.tier, L); L++; }
-  return { L, have: n - used, need: L < RAT_MAX_LV ? shardNeed(sp.tier, L) : 0 };
+  const sp = RSPECIES_BY_ID[id], L = (S.rlv && S.rlv[id]) || 0;
+  return { L, have: (S.shard[id] || 0) - shardsFor(sp.tier, L), need: L < RAT_MAX_LV ? shardNeed(sp.tier, L) : 0 };
 }
 function applyShards(id) { S.rsk[id] = autoTree(shardLevel(id).L); }
 function addShard(sp, x, y) {
-  const before = shardLevel(sp.id).L; S.shard[sp.id] = (S.shard[sp.id] || 0) + 1;
-  const now = shardLevel(sp.id).L; if (now <= before) return;
-  applyShards(sp.id);
-  if (onScreen(x, y)) popup(x, y, `⭐ ${sp.name} Lv${now}`, '#f2c14e', 18, 1.1, 60);
-  if (sp.tier >= 2 || now % 5 === 0) UI.toast(sp, `⭐ ${sp.name} 조각 강화 Lv ${now}`, '같은 쥐를 모으면 자동으로 강해져요');
+  S.shard[sp.id] = (S.shard[sp.id] || 0) + 1;
+  const s = shardLevel(sp.id);
+  if (onScreen(x, y)) popup(x, y, `⭐ 조각 +1`, '#f2c14e', 15, 0.9, 60);
+  if (s.need && s.have === s.need) UI.toast(sp, `⭐ ${sp.name} 강화 가능!`, '판이 끝나면 로비의 ⭐ 쥐 강화에서 올릴 수 있어요');
 }
 const abP = sp => abPower(sp, rsl(sp.id, 'special')) * (rsl(sp.id, 'ult') ? 1.5 : 1);   // 특수 능력 세기
 const abIs = (r, t) => r && r.sp && r.sp.ab.type === t;
@@ -127,7 +133,7 @@ const waveSize = () => Math.min(45, 15 + 3 * lv('truck'));
 // 굴착 본능: 벽 피해 +10%/레벨, 최대 20레벨(×3). 예전 1.15^레벨(무한)은 공격력 성장과 곱해져 벽이 그냥 사라졌음
 const digMult = () => 1 + 0.1 * Math.min(20, lv('dig'));
 const rushTime = () => 1.5 + 0.2 * lv('rush');
-const RUSH_NO_BREED = 3;                  // 총공격이 끝난 뒤에도 번식 금지 (흩어질 시간)
+const RUSH_NO_BREED = 1;                  // 총공격이 끝난 뒤에도 잠깐 번식 금지 (흩어질 시간)
 const rushMult = () => 2 + 0.3 * lv('rush');
 
 // ───────────────────────── 방 격자 ─────────────────────────
@@ -151,7 +157,8 @@ const wallKey = (i, j, di, dj) => (di ? `v,${i + (di > 0 ? 1 : 0)},${j}` : `h,${
 const WALL_POW_STAIRS = 20, WALL_POW = 1.5;
 // (예전 공식 wallBase ×4.6/층 과 max 를 했더니 높은 층에선 예전 공식이 다시 이겨 가혹해져서 적정 기준만 씀)
 function wallMax(ti, tj) {
-  if (isStairsRoom(ti, tj)) return powNeed(S.floor) * WALL_POW_STAIRS;
+  // 로그라이크(제한시간) 초반 허들: 계단 방 벽은 1층 2배 → 2층 8배 → 3층 14배 → 4층부터 20배 (적정 찍찍!! 기준, stage.js POW_EARLY 도 같이)
+  if (isStairsRoom(ti, tj)) return powNeed(S.floor) * Math.min(WALL_POW_STAIRS, 2 + 6 * (S.floor - 1));
   return powNeed(S.floor) * WALL_POW * (1 + 0.25 * roomDist(ti, tj));
 }
 function wallHP(i, j, di, dj) { return S.walls[wallKey(i, j, di, dj)] ?? wallMax(i + di, j + dj); }
@@ -227,6 +234,7 @@ const dashMult = r => (1 + 0.08 * rsl(r.sp.id, 'legs')) * (abIs(r, 'dash') ? 1 +
 
 // 바퀴벌레처럼: 아무 방향으로 휙 달렸다가 멈칫, 다시 다른 방향
 function newDash(r) {
+  if (r.rushLock > 0 && !(r.rushT > 0)) r.rushLock--;      // 총공격 뒤 평소 이동을 마칠 때마다 1씩 → 0 이 되면(흩어지면) 다시 번식 가능
   let a = rand(0, Math.PI * 2);
   const pa = G.pickups.length ? pickupAim(r) : null;
   const bait = G.traps && G.traps.length && Math.random() < 0.1 ? G.traps.find(t => t.armed && Math.hypot(t.x - r.x, t.y - r.y) < 320) : null;
@@ -590,7 +598,7 @@ function updateRats(dt) {
     a.x -= ux * (rr2 - d) / 2; a.y -= uy * (rr2 - d) / 2; b.x += ux * (rr2 - d) / 2; b.y += uy * (rr2 - d) / 2;
     if (a.trick || b.trick) return;
     const rushing = G.rush && (a.rushT > 0 || b.rushT > 0);
-    const canBreed = a.noBreed <= 0 && b.noBreed <= 0 && !(a.flee > 0) && !(b.flee > 0) && a.breedCD <= 0 && b.breedCD <= 0 && pop + born.length < popCap();
+    const canBreed = a.noBreed <= 0 && b.noBreed <= 0 && !(a.rushLock > 0) && !(b.rushLock > 0) && !(a.flee > 0) && !(b.flee > 0) && a.breedCD <= 0 && b.breedCD <= 0 && pop + born.length < popCap();
     // 조건이 돼도 확률로만 탄생. 실패하면 둘 다 잠깐 쉬고(같은 겹침으로 매 프레임 다시 굴리지 않게) 서로 튕겨 나감
     const lucky = canBreed && Math.random() < breedChance(pop + born.length, (breedAb(a) + breedAb(b)) / 2);
     if (canBreed && !lucky) a.breedCD = b.breedCD = BREED_FAIL_CD;
@@ -657,16 +665,18 @@ function moveRat(r, dt, ai, rushing) {
 // 높은 등급 확률은 난동 등급(+ 돌연변이 유전자)에 비례해서 오름.
 // 기본 가중치가 윗등급일수록 약 1/10 씩 작아서 초반엔 거의 안 나오고, 등급 i 는 k^i 배로 커져 후반에 따라잡는다.
 // (난동 10 → 에픽 3%·신화 0.05%, 난동 20 → 에픽 7%·신화 0.4%, 난동 40 → 신화 ≈3%)
+// 티어(meta.js rankOddsK)가 오를수록 높은 등급 쪽으로 (예전 난동 등급 대신). 해금 안 된 등급은 확률 0
 function tierWeights(bonus = 0) {
-  const k = 1 + 0.1 * S.ramp + 0.03 * lv('mutate') + 0.05 * bonus;
-  return TIERS.map((t, i) => t.w * Math.pow(k, i));
+  const k = rankOddsK() + 0.03 * lv('mutate') + 0.05 * bonus;
+  return TIERS.map((t, i) => (tierOpen(i) ? t.w * Math.pow(k, i) : 0));
 }
 function rollTier(bonus) {
   const w = tierWeights(bonus); let x = Math.random() * w.reduce((a, b) => a + b, 0);
   for (let i = 0; i < w.length; i++) { x -= w[i]; if (x <= 0) return i; }
   return 0;
 }
-function randomOfTier(t) { return pick(RSPECIES.filter(s => s.tier === t)); }
+const tierOpen = t => tierAvailable(t);                              // meta.js: 그 등급에 해금된 종이 있나
+const randomOfTier = t => pickSpecies(t);                            // meta.js: 해금된 종만 (없으면 아래 등급)
 function addRat(sp, x, y, isBirth) {
   const r = makeRat(sp.id, x, y);
   r.born = 0; r.vz = 0; r.breedCD = breedCool();
@@ -693,7 +703,7 @@ function birth(x, y, bonus = 0) {
 }
 // 승급: 같은 등급 PROMOTE_COST마리 희생 → 윗등급 랜덤 1마리
 function promote(tier) {
-  if (tier >= TIERS.length - 1) return false;
+  if (tier >= TIERS.length - 1 || !tierOpen(tier + 1)) return false;
   const pool = G.rats.filter(r => r.tier === tier && !r.temp);
   if (pool.length < PROMOTE_COST || G.rats.length - PROMOTE_COST + 1 < 2) return false;
   const vr = viewRect(80);
@@ -1011,7 +1021,7 @@ function smashItem(it) {
   if (w) { bigBanner(w[1], `${G.combo} COMBO · 수입 ×${comboMult().toFixed(2)}`, w[2]); Sfx.comboWord(); }
   const gain = it.value * (1 + 0.5 * Math.min(it.air, AIR_MAX)) * (it.crit ? 2 : 1) * comboMult() * (abIs(it.by, 'loot') ? 1 + 0.4 * abP(it.by.sp) : 1);
   earn(gain);
-  addRamp(1 + Math.floor(it.zi / 3));
+  researchDrop(it);                              // meta.js: 가구·물건에서 가끔 📑 연구자료
   const vis = onScreen(it.x, it.y, 300);
   if (vis) {
     const big = clamp(it.r / 16, 0.6, 2.5);
@@ -1046,14 +1056,7 @@ function smashItem(it) {
   if (words[G.mk] && vis && !G.quiet) { popup(it.x, it.y, words[G.mk], G.mk >= 8 ? '#d9786a' : '#f0c878', 24 + G.mk, 1, 90); G.punch = Math.min(0.07, 0.02 + G.mk * 0.005); addShake(0.08); }
 }
 function earn(v) { S.cheese += v; S.lifetime += v; G.earnAcc += v; }
-function addRamp(n) {
-  S.rampProg += n;
-  while (S.rampProg >= rampNeed(S.ramp)) {
-    S.rampProg -= rampNeed(S.ramp); S.ramp++;
-    if (!G.ult && !G.sj) bigBanner(`🔥 난동 등급 ${S.ramp}!`, '높은 등급 쥐가 태어날 확률이 올랐다', '#f0c878');   // 필살기·슈퍼 점프 연출은 가리지 않음
-    Sfx.clear();
-  }
-}
+
 function stampAt(x, y, fn) {
   const [i, j] = roomOf(x, y), key = rk(i, j);
   if (!G.mess[key]) { const cv = document.createElement('canvas'); cv.width = RW * 0.6; cv.height = RH * 0.6; const m = cv.getContext('2d'); m.scale(0.6, 0.6); G.mess[key] = m; }
@@ -1118,12 +1121,15 @@ window.addEventListener('pointerup', e => {
 });
 canvas.addEventListener('wheel', e => { e.preventDefault(); G.cam.z = clamp(G.cam.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 0.45, 1.3); G.userCamT = G.t; clampCam(); }, { passive: false });
 function onTap(sx, sy) {
-  if (G.sj || (G.ult && G.ult.phase === 'cut')) return;
+  if (G.sj || (G.ult && G.ult.phase === 'cut') || G.go || G.heist) return;
   const w = screenToWorld(sx, sy);
   G.rush = { x: w.x, y: w.y, t: rushTime(), max: rushTime() };
   // 지금 화면에 보이는 쥐들만 클릭 지점으로 모임 (돌진 중엔 번식 금지)
   // 돌진이 끝나도 몰려 있던 쥐들이 흩어지며 부딪히므로 3초 더 번식 금지 (유저 조작으로 생긴 충돌에선 절대 탄생 없음)
-  for (const r of G.rats) if (onScreen(r.x, r.y, 20)) { r.sleep = 0; r.rushT = rushTime(); r.noBreed = rushTime() + RUSH_NO_BREED; }
+  // 시간만 막으면(돌진 + 3초) 그 뒤에도 클릭 지점에 빽빽하게 뭉쳐 있던 쥐들끼리 부딪혀 한꺼번에 태어났음(클릭 = 쥐 생성 버그)
+  // → 총공격에 참여한 쥐는 흩어질 때까지(평소 이동 1번을 마칠 때까지, rushLock) 번식 금지
+  // 화면의 쥐는 전부 모임. 번식 금지는 돌진 + 1초 + 흩어짐 1번으로 짧게 (예전 3초 + 2번이면 클릭을 자주 할 때 번식이 아예 멈췄음)
+  for (const r of G.rats) if (onScreen(r.x, r.y, 20)) { r.sleep = 0; r.rushT = rushTime(); r.noBreed = rushTime() + RUSH_NO_BREED; r.rushLock = 1; }
   ring(w.x, w.y, 60, '#fff', 0.4, 5);
   Sfx.click(); Sfx.dash();
 }
@@ -1266,6 +1272,7 @@ function render() {
   if (G.ult && G.ult.phase === 'act' && G.ult.eng.sorted) for (const e of G.ult.eng.sorted(G.ult)) list.push(e);   // 필살기 소품(탁자·자동차·무대)도 앞뒤 순서대로
   for (const h of G.humans) if (onScreen(h.x, h.y, 160)) list.push({ y: h.y, f: () => drawHuman(h) });
   hazardsSorted(list);
+  gameOverSorted(list);                 // meta.js: 게임 오버 습격 고양이 · 잡힌 쥐 철창
   for (const p of G.parcels) if (onScreen(p.x, p.y)) list.push({ y: p.y, f: () => drawParcel(p) });
   if (isOpen(...STAIRS)) { const sp = stairsPos(); if (onScreen(sp.x, sp.y, 300)) list.push({ y: sp.y - 60, f: drawStairs }); }
   for (const p of G.pickups) if (onScreen(p.x, p.y)) list.push({ y: p.y, f: () => drawPickup(p) });
@@ -1383,6 +1390,18 @@ function drawItem25(it) {
   ctx.restore();
   if (it.state === 'rest' && it.hp < it.hpMax) { const w = it.r * 2, x = it.x - it.r, y = baseY - depth - it.r * TILT - 10; ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(x - 1, y - 1, w + 2, 6); ctx.fillStyle = '#c9745b'; ctx.fillRect(x, y, w * clamp(it.hp / it.hpMax, 0, 1), 4); }
 }
+// 등급 오라: 발밑에 등급 색 빛 + 고리. 높은 등급일수록 크고 진하게, 전설·신화는 위로 반짝이가 피어오름
+function drawTierAura(r, sc) {
+  const t = r.tier, col = TIERS[t].col, k = 0.55 + t * 0.12, pul = 0.85 + 0.15 * Math.sin(G.t * (3 + t) + (r.seed || 0) * 7);
+  const rx = (16 + t * 3) * sc * pul, ry = rx * 0.5;
+  ctx.save();
+  const g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx);
+  g.addColorStop(0, col); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.globalAlpha = Math.min(0.75, 0.2 + t * 0.1) * k; ctx.fillStyle = g; ctx.scale(1, ry / rx); ctx.beginPath(); ctx.arc(0, 0, rx, 0, 6.28); ctx.fill();
+  ctx.globalAlpha = Math.min(0.9, 0.3 + t * 0.1); ctx.strokeStyle = col; ctx.lineWidth = (1.5 + t * 0.4) / (ry / rx); ctx.beginPath(); ctx.arc(0, 0, rx * 0.8, 0, 6.28); ctx.stroke();
+  ctx.restore();
+  if (t >= 4 && Math.random() < 0.06 * (t - 2) && onScreen(r.x, r.y)) particle({ x: r.x + rand(-12, 12) * sc, y: r.y, z: rand(0, 10), vx: 0, vy: 0, vz: rand(40, 90), life: 0.7, max: 0.7, size: rand(2, 3.5), color: col, type: 'spark', drag: 1 });
+}
 function drawRat(r) {
   const sc = RAT_SCALE * TIERS[r.tier].size * (r.born < 1 ? easeOutBack(r.born) : 1) * (r.sp.id === 'starchef' ? MOUNT_RAT : 1);   // 요리사 등에 탄 쥐는 조금 작게 (humans.js)
   if (sc < 0.02) return;
@@ -1394,8 +1413,7 @@ function drawRat(r) {
   if (r.ghost) ctx.globalAlpha = 0.55 + 0.15 * Math.sin(G.t * 10);
   if (r.temp && r.temp < 0.6) ctx.globalAlpha *= r.temp / 0.6;
   ctx.translate(r.x, r.y * TILT - r.z - mz);
-  if ((TIERS[r.tier].size > 1.3 || r.tier >= 3) && !mz) {   // 탈것 위에선 등급 고리 생략 (요리사 몸통에 박혀 보임)
-     ctx.globalAlpha = 0.35; ctx.strokeStyle = TIERS[r.tier].col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0, 0, 18 * sc, 10 * sc, 0, 0, 6.28); ctx.stroke(); ctx.globalAlpha = 1; }
+  if (r.tier >= 1 && !mz && !r.temp) drawTierAura(r, sc);   // 등급 색 오라 (탈것 위에선 생략 — 요리사 몸통에 박혀 보임)
   if (rsl(r.sp.id, 'ult')) { const hg = 26 * sc; ctx.save(); ctx.globalAlpha = 0.4 + 0.15 * Math.sin(G.t * 6 + r.walk); const g = ctx.createRadialGradient(0, -hg * 0.4, 2, 0, -hg * 0.4, hg); g.addColorStop(0, '#fff3bf'); g.addColorStop(1, 'rgba(255,212,59,0)'); ctx.fillStyle = g; circ(ctx, 0, -hg * 0.4, hg); ctx.fill(); ctx.restore(); }
   if (r.frenzy > 0 && Math.random() < 0.3 && onScreen(r.x, r.y)) particle({ x: r.x + rand(-8, 8), y: r.y, z: rand(10, 30), vx: 0, vy: 0, vz: 60, life: 0.4, max: 0.4, size: 3, color: '#e39a5a', type: 'spark', drag: 2 });
   const tr = r.trick, hh = 11 * sc, f = r.face;
@@ -1552,8 +1570,9 @@ function initWorld() {
   const cx = (hi + 0.5) * RW, cy = (hj + 0.5) * RH;
   const rooms = openRooms();
   const place = id => { const [i, j] = pick(rooms); return makeRat(id, (i + 0.5) * RW + rand(-RW * 0.35, RW * 0.35), (j + 0.5) * RH + rand(-RH * 0.3, RH * 0.3)); };
-  G.rats = S.herd.filter(id => RSPECIES_BY_ID[id]).slice(0, popCap()).map(place);
-  if (!G.rats.length) G.rats = ['brownrat', 'mouse', 'labrat'].map(place);
+  // 로그라이크: 판이 진행 중일 때만 쥐가 있음 (로비에선 빈 연구소). 제한시간이 비어 있으면(개편 전 저장) 이 층 시간으로
+  G.rats = S.inRun ? S.herd.filter(id => RSPECIES_BY_ID[id]).slice(0, popCap()).map(place) : [];
+  if (S.inRun && !G.rats.length) G.rats = ['brownrat', 'mouse', 'labrat'].map(place);
   buildGrids();
   for (const [i, j] of openRooms()) furnishRoom(i, j);
   for (const [i, j] of openRooms()) for (let n = 0; n < zoneCap(); n++) spawnInRoom(i, j, true);
@@ -1561,6 +1580,7 @@ function initWorld() {
   for (const [i, j] of openRooms()) { if (isStairsRoom(i, j)) continue; spawnHumans(i, j, i || j ? 1 : 2); if (S.floor >= 2 && (i || j)) spawnTraps(i, j, 1); }
   if (isBossFloor(S.floor) && !S.bossBeat[S.floor]) { G.boss = makeBoss(S.floor); if (isOpen(...STAIRS)) G.bossStartLater = true; }
   G.cam.x = cx - viewW() / 2; G.cam.y = cy * TILT - viewH() / 2; clampCam();
+  if (S.inRun && !(S.timeLeft > 0)) S.timeLeft = floorTime(S.floor);
 }
 let last = performance.now();
 function frame(now) {

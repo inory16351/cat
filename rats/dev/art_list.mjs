@@ -79,6 +79,36 @@ export const WORLD = [
   ['mousetrap_snap', 'w:mousetrap_snap', 'the same wooden spring mouse trap seen from a gentle three-quarter top view, SNAPPED shut, the metal bar slammed down'],
   ['stairs', 'w:stairs', 'a concrete emergency staircase going UP, gentle three-quarter front view from above, grey steps with a yellow safety stripe on each edge, a green EXIT-style running figure sign without text above it, handrails'],
 ];
+// 로비(아지트) UI·소품 (2026-10): emoji 자리 = 'lb:키'
+export const LOBBY_UI = [
+  ['lb_wheel', 'lb:wheel', 'a big round hamster exercise wheel seen from the FRONT (a perfect circle facing the camera), metal rim with thin spokes and rungs, on a small stand, EMPTY, no rodent'],
+  ['lb_map', 'lb:map', 'icon: a folded hand-drawn escape map with a dotted red route line and a cheese mark (no letters)'],
+  ['lb_dumbbell', 'lb:dumbbell', 'a tiny dumbbell made of a pencil with two red bottle caps as weights, side view'],
+  ['lb_skill', 'lb:skill', 'icon: a cheese wheel with a small brass gear pressed into it'],
+  ['lb_dex', 'lb:dex', 'icon: a small worn notebook with a paw print on the cover and a bookmark ribbon'],
+  ['lb_save', 'lb:save', 'icon: a retro floppy disk with a cheese sticker label'],
+  ['lb_tape', 'lb:tape', 'a short strip of beige masking tape, horizontal, torn ends'],
+  ['lb_pin', 'lb:pin', 'a red push pin seen from a three-quarter top view'],
+  ['lb_plank', 'lb:plank', 'a wide blank wooden sign plank with two little nails, horizontal, plain wood grain, EMPTY (no text)'],
+  ['lb_card', 'lb:card', 'a blank rectangular cardboard panel with slightly torn edges, flat front view, plain and EMPTY'],
+  ['lb_cheese', 'lb:cheese', 'a small wedge of yellow cheese with holes, side view'],
+  ['lb_cup', 'lb:cup', 'a thimble used as a tiny cup of tea with a wisp of steam'],
+];
+// 로그라이크 (2026-10): 게임 오버 우리 · 클리어 연출 연구자료 · 경보등 · 티어 배지 8종 (emoji 자리 = 'g:키' / 'rk:N')
+export const ROGUE_ART = [
+  ['rg_cage', 'g:cage', 'a small square metal wire rodent capture cage with a carry handle on top and a little padlock on the door, front view, thin dark grey bars with cream base tray, EMPTY inside, the bars are see-through gaps (transparent between the bars)'],
+  ['rg_docs', 'g:docs', 'a bundle of stolen secret research documents: a tan manila folder bursting open with white paper sheets with tiny graphs flying out, a red rubber stamp mark (no letters) on the folder'],
+  ['rg_paper', 'g:paper', 'a single white research paper sheet with a tiny line chart and a small rat paw print on it, slightly curled corner, front view'],
+  ['rg_siren', 'g:siren', 'a red rotating emergency alarm siren light on a small grey base, glowing, with short light rays'],
+  ['rk_1', 'rk:1', 'a round tier badge medal: plain grey-white lab rat face icon on a simple grey metal disc, rank 1 (very plain)'],
+  ['rk_2', 'rk:2', 'a round tier badge medal: a cheese wedge icon on a bronze disc with a tiny ribbon, rank 2'],
+  ['rk_3', 'rk:3', 'a round tier badge medal: a flashlight icon on a sage green disc with a bronze rim and ribbon, rank 3'],
+  ['rk_4', 'rk:4', 'a shield-shaped tier badge: an old brass key icon on a soft blue shield with a silver rim, rank 4'],
+  ['rk_5', 'rk:5', 'a shield-shaped tier badge: a clipboard icon on a purple shield with a silver rim and small wings, rank 5'],
+  ['rk_6', 'rk:6', 'a star-shaped military tier medal: a rat silhouette on a terracotta red star with a gold rim and a striped ribbon, rank 6'],
+  ['rk_7', 'rk:7', 'a fancy tier crest: a golden crown icon on a deep red crest with a gold laurel wreath around it, rank 7'],
+  ['rk_8', 'rk:8', 'the highest legendary tier crest: a starry night-sky cosmic disc with a tiny crowned rat silhouette, golden laurel wings and sparkles around, rank 8 (most magnificent)'],
+];
 // 연구소 물건 (부수는 대상, emoji 자리에 'i:키'). 게임에선 서 있는 스프라이트로 그림 (3/4 시점, 바닥 = 이미지 아래쪽)
 export const LAB_ITEMS = [
   ['flask', 'i:flask', 'a round-bottom glass flask with bubbling green liquid and a cork'],
@@ -170,6 +200,12 @@ Asset: ${desc}. Centered.
 Canvas: square 1024x1024, fully transparent background.` });
   for (const [id, emoji, desc] of FURNITURE) list.push({ kind: 'fx', id: 'furn_' + id, emoji, desc, folder: 'Furniture', prompt: `${STYLE}
 Asset: a single piece of game furniture sprite: ${desc}. Gentle three-quarter view from slightly above, standing on the floor, the whole object visible, alone, centered.
+Canvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
+  for (const [id, emoji, desc] of LOBBY_UI) list.push({ kind: 'fx', id, emoji, desc, folder: 'Lobby', prompt: `${STYLE}
+Asset: a single game UI sprite: ${desc}. The object alone, centered, filling about 85% of the frame.
+Canvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
+  for (const [id, emoji, desc] of ROGUE_ART) list.push({ kind: 'fx', id, emoji, desc, folder: 'Rogue', prompt: `${STYLE}
+Asset: a single game sprite: ${desc}. The object alone, centered, filling about 85% of the frame.
 Canvas: square 1024x1024, fully transparent background. No text, no shadow, no border.` });
   for (const [id, emoji, desc] of WORLD) list.push({ kind: 'fx', id, emoji, desc, folder: 'World', prompt: `${STYLE}
 Asset: a single game sprite: ${desc}. The object alone, centered, filling about 85% of the frame.

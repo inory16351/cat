@@ -23,19 +23,25 @@ function walk(dir) {
 const rel = p => path.relative(ROOT, p).split(path.sep).join('/');
 
 const assets = {};
+// 이미지 ~700장 WebP 변환: 한 장씩 하면 몇 분 걸려서 8개씩 동시에
+const jobs = [];
 const data = readFileSync(path.join(RATS, 'js', 'data.js'), 'utf8');
 for (const name of [...new Set([...data.matchAll(/img: '([a-z_]+)'/g)].map(m => m[1]))].sort()) {
   const p = path.join(ROOT, 'assets', 'v2', 'bg', name + '.png');
-  if (existsSync(p)) assets[rel(p)] = await webpUri(p, 1536);
+  if (existsSync(p)) jobs.push([p, 1536]);
 }
 // 고양이 방치 게임의 고양이 파츠 (연구소 고양이·고양이 보스)
 const catParts = path.join(ROOT, 'assets', 'v2', 'parts');
-if (existsSync(catParts)) for (const p of walk(catParts).sort()) if (p.endsWith('.png')) assets[rel(p)] = await webpUri(p, 360);
+if (existsSync(catParts)) for (const p of walk(catParts).sort()) jobs.push([p, 360]);
 const ratsDir = path.join(ROOT, 'assets', 'rats');
 if (existsSync(ratsDir)) for (const p of walk(ratsDir).sort()) {
   const stem = path.basename(p, '.png');
-  assets[rel(p)] = await webpUri(p, /^(bg_|title)/.test(stem) ? 1280 : 360);
+  jobs.push([p, /^lobby_bg/.test(stem) ? 1600 : /^(bg_|title)/.test(stem) ? 1280 : 360]);
 }
+const uris = new Array(jobs.length);
+let next = 0;
+await Promise.all(Array.from({ length: 8 }, async () => { while (next < jobs.length) { const i = next++; uris[i] = await webpUri(...jobs[i]); } }));
+jobs.forEach(([p], i) => { assets[rel(p)] = uris[i]; });
 
 const LOADER = `<script>
 // 단일 HTML 빌드: 이미지 경로를 내장 데이터로 바꿔치기 (없는 이미지는 요청하지 않음)
@@ -57,7 +63,8 @@ window.__A = ${JSON.stringify(assets)};
 </script>`;
 
 let html = readFileSync(path.join(RATS, 'index.html'), 'utf8');
-const css = readFileSync(path.join(RATS, 'style.css'), 'utf8');
+// CSS 의 url(../assets/…png) 도 내장 데이터로 (로비 판자·압정·테이프 등)
+const css = readFileSync(path.join(RATS, 'style.css'), 'utf8').replace(/url\((?:\.\.\/)+(assets\/[^)'"]+\.png)\)/g, (m, k) => (assets[k] ? `url(${assets[k]})` : m));
 html = html.replace(/<link rel="stylesheet" href="style\.css[^"]*">/, () => `<style>\n${css}\n</style>`);
 const title = assets['assets/rats/title.png'];
 html = html.replace(/<img id="titleArt" src="[^"]*"/, () => (title ? `<img id="titleArt" src="${title}"` : '<img id="titleArt" style="display:none"'));

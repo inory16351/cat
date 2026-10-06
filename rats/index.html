@@ -6,7 +6,7 @@
 <title>쥐들의 반란</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=92">
+<link rel="stylesheet" href="style.css?v=119">
 </head>
 <body>
 <div id="wrap">
@@ -16,10 +16,10 @@
   <div id="hud" class="hidden">
     <div class="hud-money">
       <div class="money">🧀 <b id="cheese">0</b></div>
-      <div class="ips"><span id="ips">0</span> /초</div>
+      <div class="ips"><span id="ips">0</span> /초 · 📑 <b id="research">0</b></div>
     </div>
     <div class="hud-level">
-      <div class="lvl-line"><b id="ramp">난동 등급 0</b> · <span id="zone"></span></div>
+      <div class="lvl-line"><b id="ramp">훈장 1</b> · <span id="zone"></span></div>
       <div class="bar"><i id="rampBar"></i></div>
       <div class="lvl-sub" id="rampSub"></div>
     </div>
@@ -37,7 +37,7 @@
 
   <!-- 하단 도크 -->
   <div id="dock" class="hidden">
-    <button id="btnSkills" class="dock-btn">🌳<span>스킬</span><em id="skBadge" class="badge hidden">0</em></button>
+    <button id="btnSkills" hidden class="dock-btn">🌳<span>스킬</span><em id="skBadge" class="badge hidden">0</em></button>
     <button id="btnPromo" class="dock-btn">⬆️<span>승급</span><em id="prBadge" class="badge hidden">!</em></button>
     <button id="btnDex" class="dock-btn">📖<span>도감</span><em id="dexBadge" class="badge hidden">N</em></button>
     <button id="btnStats" class="dock-btn">📊<span>스탯</span></button>
@@ -45,11 +45,13 @@
     <button id="btnBoss" class="dock-btn" title="보스 강제 소환 (테스트용, 누를 때마다 다음 보스)">👹<span>보스</span></button>
     <button id="btnUlt" class="dock-btn" title="필살기 골라서 발동 (테스트용)">🎬<span>필살기</span></button>
     <button id="btnSJ" class="dock-btn" title="슈퍼 점프 강제 발동 (테스트용)">🚀<span>슈퍼점프</span></button>
+    <button id="btnSave" class="dock-btn small" title="저장">💾</button>
     <button id="btnMute" class="dock-btn small">🔊</button>
     <button id="btnReset2" class="dock-btn small" title="초기화">🗑️</button>
   </div>
+  <div id="tierPanel" class="tier-panel hidden"></div>
   <button id="btnClimb" class="big climb hidden">👹 보스 재도전!</button>
-  <div id="hint" class="hint hidden">🐀 계단 방 벽을 부수고 위층으로 탈출! · 클릭하면 총공격 (보스·고양이에게 특히 효과적) · 같은 쥐를 또 얻으면 ⭐조각으로 자동 강화</div>
+  <div id="hint" class="hint hidden">🐀 계단 방 벽을 부수고 위층으로 탈출! · ⏳ 제한시간 안에! · 클릭하면 총공격 · 같은 쥐를 또 얻으면 ⭐조각 (강화는 로비에서)</div>
   <div id="toasts"></div>
 
   <!-- 신종 탄생 -->
@@ -68,23 +70,20 @@
   <div id="resetAsk" class="screen hidden">
     <div class="panel pop unlock-card">
       <h2>🗑️ 정말 초기화할까요?</h2>
-      <p>치즈, 강화, 도감, 탈출 기록이 전부 사라지고<br>연구실 쥐 세 마리부터 다시 시작해요.</p>
+      <p>치즈·연구자료·훈장·훈련·친구들·탈출 기록이 전부 사라지고<br>처음부터 다시 시작해요.</p>
       <div class="row-btns"><button id="rsNo" class="mini">취소</button><button id="rsYes" class="big danger">초기화</button></div>
     </div>
   </div>
 
-  <!-- 시작 화면 -->
-  <div id="start" class="screen">
-    <div class="start-card">
-      <img id="titleArt" src="../assets/rats/title.png" alt="" onerror="this.style.display='none'">
-      <div class="start-side">
-        <h1>쥐들의 <span>반란</span></h1>
-        <div class="mode">연구소 탈출기</div>
-        <p>지하 실험실의 쥐 <b>세 마리</b>가 탈출을 꿈꾼다.<br>부딪히면 번식, 부수면 치즈, 연구원은 날려버려라.<br>계단을 찾아 한 층씩, 옥상까지 올라가라!</p>
-        <button id="btnStart" class="big">반란 시작!</button>
-        <button id="btnReset" class="mini reset-btn">🗑️ 초기화</button>
-      </div>
-    </div>
+  <!-- 시작 화면 = 아지트 로비 (js/lobbyscene.js) -->
+  <div id="start" class="screen home">
+    <canvas id="homeCv"></canvas>
+    <div id="homeHot"></div>
+    <div class="home-logo"><h1>쥐들의 <span>반란</span></h1><div class="mode">찍찍 비밀 아지트</div></div>
+    <div class="home-top"><span title="치즈">🧀 <b id="homeCheese">0</b></span><span title="훔친 연구 자료">📑 <b id="homeRes">0</b></span></div>
+    <button id="btnStart" hidden></button>
+    <p class="home-tip">🐾 팻말 달린 물건을 눌러 봐요 · 쥐는 콕 누르면 폴짝, 끌어다 놓으면 휙~</p>
+    <button id="btnReset" hidden></button>
   </div>
 
   <!-- 오프라인 보상 -->
@@ -157,7 +156,7 @@
   <!-- 도감 -->
   <div id="dex" class="screen hidden">
     <div class="panel-head">
-      <h2>📖 쥐 도감</h2>
+      <h2>📖 친구들!!</h2>
       <div class="dex-sum" id="dexSum"></div>
       <button class="close">✕</button>
     </div>
@@ -168,30 +167,33 @@
   </div>
 </div>
 
-<script src="../js/audio.js?v=92"></script>
-<script src="../js/draw.js?v=92"></script>
-<script src="../idle/js/data.js?v=92"></script>
-<script src="../idle/js/citydraw.js?v=92"></script>
-<script src="js/data.js?v=92"></script>
-<script src="js/labdraw.js?v=92"></script>
-<script src="js/rodent.js?v=92"></script>
-<script src="js/parts_meta.js?v=92"></script>
-<script src="js/art_manifest.js?v=92"></script>
-<script src="js/ratrig.js?v=92"></script>
-<script src="js/front_meta.js?v=92"></script>
-<script src="js/frontrig.js?v=92"></script>
-<script src="js/human_meta.js?v=92"></script>
-<script src="js/mount_meta.js?v=92"></script>
-<script src="../assets/v2/parts/parts_meta.js?v=92"></script>
-<script src="js/game.js?v=92"></script>
-<script src="js/stage.js?v=92"></script>
-<script src="js/humans.js?v=92"></script>
-<script src="js/hazards.js?v=92"></script>
-<script src="js/superjump.js?v=92"></script>
-<script src="js/acts.js?v=92"></script>
-<script src="js/ults.js?v=92"></script>
-<script src="js/ults_parody.js?v=92"></script>
-<script src="js/ui.js?v=92"></script>
+<script src="../js/audio.js?v=119"></script>
+<script src="../js/draw.js?v=119"></script>
+<script src="../idle/js/data.js?v=119"></script>
+<script src="../idle/js/citydraw.js?v=119"></script>
+<script src="js/data.js?v=119"></script>
+<script src="js/labdraw.js?v=119"></script>
+<script src="js/rodent.js?v=119"></script>
+<script src="js/parts_meta.js?v=119"></script>
+<script src="js/art_manifest.js?v=119"></script>
+<script src="js/ratrig.js?v=119"></script>
+<script src="js/front_meta.js?v=119"></script>
+<script src="js/frontrig.js?v=119"></script>
+<script src="js/human_meta.js?v=119"></script>
+<script src="js/mount_meta.js?v=119"></script>
+<script src="../assets/v2/parts/parts_meta.js?v=119"></script>
+<script src="js/game.js?v=119"></script>
+<script src="js/stage.js?v=119"></script>
+<script src="js/humans.js?v=119"></script>
+<script src="js/hazards.js?v=119"></script>
+<script src="js/superjump.js?v=119"></script>
+<script src="js/acts.js?v=119"></script>
+<script src="js/ults.js?v=119"></script>
+<script src="js/ults_parody.js?v=119"></script>
+<script src="js/meta.js?v=119"></script>
+<script src="js/ui.js?v=119"></script>
+<script src="js/lobby.js?v=119"></script>
+<script src="js/lobbyscene.js?v=119"></script>
 <script>
   loadSave();
   const fit = () => {
@@ -206,6 +208,7 @@
   fit();
   initWorld();
   UI.init();
+  HOME.init();
   requestAnimationFrame(frame);
 </script>
 </body>

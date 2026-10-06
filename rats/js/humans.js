@@ -115,7 +115,7 @@ function humanBounce(h) {
 function humanPoof(h) {
   h.state = 'dead';
   const gain = h.value * (1 + 0.5 * Math.min(h.air, AIR_MAX)) * comboMult();
-  earn(gain); addRamp(3 + S.floor); S.smashed++;
+  earn(gain); S.smashed++;
   G.combo += 2; G.comboT = 1.6; G.comboBump = 1;
   shock(h.x, h.y, 110, h.hpMax * 0.4, null, '#fff', 1);
   if (!onScreen(h.x, h.y)) return;
@@ -145,6 +145,7 @@ function updateHumans(dt) {
   for (const h of G.humans) {
     h.appear = Math.min(1, h.appear + dt * 3); h.hitT = Math.max(0, h.hitT - dt); h.flashT = Math.max(0, h.flashT - dt); h.jit = Math.max(0, h.jit - dt * 12);
     if (h.say) { h.say.t -= dt; if (h.say.t <= 0) h.say = null; }
+    if (h.raid) continue;                      // 게임 오버 습격 경비원 (meta.js updateGameOver 가 움직임)
     if (h.boss) { updateBoss(h, dt); continue; }
     if (h.held) continue;                      // 필살기가 붙잡고 있음 (ults_parody.js 풍선 등)
     const px = h.x, py = h.y;
@@ -381,7 +382,7 @@ function bossDown(b) {
   G.bossFight = null;
   if (!b.test) { S.bossBeat = S.bossBeat || {}; S.bossBeat[S.floor] = true; if (S.bossFail === S.floor) S.bossFail = 0; }
   else bigBanner('🏆 보스 격파! (테스트)', '보스 버튼으로 다음 보스를 불러올 수 있어요', '#f2c14e');
-  const gain = b.value * comboMult(); earn(gain); addRamp(30);
+  const gain = b.value * comboMult(); earn(gain);
   b.say = { text: pick(['기억해 두겠다아아~!', '퇴직금은?!', '으아아아~!']), t: 2 };
   popup(b.x, b.y, '🧀+' + fmt(gain), '#f2c14e', 40, 2, 200);
   for (let i = 0; i < 20; i++) G.coins.push({ x: b.x + rand(-60, 60), y: b.y, t: 0, dur: rand(0.6, 1.2) });

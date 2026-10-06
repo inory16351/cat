@@ -37,7 +37,9 @@ const bossHP = f => BOSS_HP0 * Math.pow(BOSS_GROW, f - BOSS_EVERY);
 // 층별 적정 찍찍!! = POW_NEED0 × POW_NEED_GROW^(층-1). 벽 체력·벽 게이트(game.js wallGate)·고양이 체력이 전부 이 값 기준.
 // ×4 는 가혹했음(사용자): 시뮬 25분에 무리 전투력은 층마다 ≈×3.5 늘지만 층당 시간이 1→4분으로 늘어 9층에서 적정의 35~75%에 막힘 → ×3.3
 const POW_NEED0 = 2000, POW_NEED_GROW = 3.3;
-const powNeed = f => POW_NEED0 * Math.pow(POW_NEED_GROW, f - 1);
+// 로그라이크 초반 허들: 첫 판(스킬 없음·쥐 30마리 ≈ 찍찍!! 350)도 1층은 넘게 1~3층 적정을 낮춤 (4층부터 그대로)
+const POW_EARLY = [0.2, 0.45, 0.75];
+const powNeed = f => POW_NEED0 * Math.pow(POW_NEED_GROW, f - 1) * (POW_EARLY[f - 1] ?? 1);
 
 // ── 층 들어가기 ──
 function enterFloor(f, why) {
@@ -56,6 +58,7 @@ function enterFloor(f, why) {
   if (isBossFloor(S.floor) && !(S.bossBeat || {})[S.floor]) G.boss = makeBoss(S.floor);
   G.cam.x = cx - viewW() / 2; G.cam.y = cy * TILT - viewH() / 2; clampCam();
   const z = floorZone(S.floor);
+  if (why !== 'load') S.timeLeft = floorTime(S.floor);       // meta.js: 층마다 제한시간 (못 찾으면 게임 오버)
   if (why === 'kick') bigBanner(`😵 ${S.floor}층으로 쫓겨났다…`, '물건을 부숴 강화하고 계단에서 재도전!', '#e8a3a0');
   else if (why !== 'load') bigBanner(`🏢 ${S.floor}층 · ${z.name}`, isBossFloor(S.floor) && G.boss ? `⚠ 보스 층! 계단 방에 ${bossOf(S.floor).name}` : '계단 방 벽을 부숴라!', isBossFloor(S.floor) ? '#e8786a' : '#f0c878');
   writeSave();
@@ -104,13 +107,14 @@ function startBossFight() {
   const b = G.boss; b.state = 'fight'; b.t = 0;
   G.bossFight = { t: BOSS_TIME, max: BOSS_TIME };
   const def = b.boss;
-  bigBanner(`👹 ${def.name}`, `"${def.title}" · ${BOSS_TIME}초 안에 쓰러뜨려라!`, '#e8786a');
+  bigBanner(`👹 ${def.name}`, `"${def.title}" · 제한시간 안에 쓰러뜨려라!`, '#e8786a');
   b.say = { text: def.title, t: 2.4 };
   flash('#e8786a', 0.3); addShake(0.4); Sfx.boom(1.2); Sfx.comboWord();
   G.cam.x = b.x - viewW() / 2; G.cam.y = b.y * TILT - viewH() / 2; clampCam(); G.userCamT = G.t;
 }
 function updateStage(dt) {
   updatePower(dt);
+  updateRunTimer(dt); updateGameOver(dt); updateHeist(dt);   // meta.js: 층 제한시간 · 게임 오버 습격 · 클리어 탈취 연출
   // 층 이동 연출 (까맣게 → 층 바꾸기 → 밝아짐)
   if (G.trans) {
     const T = G.trans; T.t += dt;
@@ -118,40 +122,21 @@ function updateStage(dt) {
     if (T.t >= T.dur) G.trans = null;
     return;
   }
-  const bf = G.bossFight;
-  if (bf && G.boss && G.boss.state === 'fight' && !G.ult && !G.sj) {
-    bf.t -= dt;
-    if (bf.t <= 0 && G.boss.test) {
-      // 테스트 보스: 쫓겨나지 않고 보스만 퇴장
-      G.bossFight = null; G.boss.say = { text: '오늘은 이만!', t: 1.5 }; G.boss.state = 'dying'; G.boss.vz = 900; G.boss.vr = 4; G.boss.fly = { style: 'star', t: 0 };
-      bigBanner('⏰ 시간 초과! (테스트)', '실제 보스 층이었다면 아래층으로 쫓겨나요', '#e8786a');
-      return;
-    }
-    if (bf.t <= 0) {
-      // 시간 초과: 보스 승리 → 한 층 아래로
-      G.boss.say = { text: '하하하! 다시 와라!', t: 2 };
-      S.bossFail = S.floor; G.bossFight = null;
-      bigBanner('⏰ 시간 초과!', '쥐들이 쫓겨난다…', '#e8786a'); Sfx.deny();
-      for (const r of G.rats) if (onScreen(r.x, r.y) && !r.ultOn) ragdoll(r, rand(0, 6.28), 420, 380);
-      G.trans = { t: -1.2, dur: 1.6, to: S.floor - 1, why: 'kick' };
-      return;
-    }
-  }
+  // 보스 전용 제한시간은 없음 (사용자): 보스가 있든 없든 층(스테이지) 제한시간 하나 — meta.js updateRunTimer. 보스 층은 제한시간이 그만큼 김
   // 계단: 방이 열렸고 보스가 없으면, 쥐가 닿는 순간 위층으로
-  if (!isOpen(...STAIRS) || (G.boss && G.boss.state !== 'dead') || G.ult || G.sj) { G.climbAsk = false; return; }
+  if (!isOpen(...STAIRS) || (G.boss && G.boss.state !== 'dead') || G.ult || G.sj || G.go || G.heist) { G.climbAsk = false; return; }
   const sp = stairsPos(), touch = G.rats.some(r => !r.temp && !r.ultOn && Math.abs(r.x - sp.x) < 110 && Math.abs(r.y - sp.y) < 60);
   if (!touch) return;
-  if (S.bossFail && S.bossFail === S.floor + 1) { G.climbAsk = true; return; }   // 쫓겨났던 보스 층: 버튼으로 재도전
   climb();
 }
 function climb() {
-  if (G.trans) return;
+  if (G.trans || G.heist || G.go) return;
   G.climbAsk = false;
   const to = S.floor + 1;
   if (S.bossFail === to) S.bossFail = 0;
-  G.trans = { t: 0, dur: 1.6, to, why: 'up' };
+  startHeist();                         // meta.js: "연구 자료를 훔쳤다!!! 빨리 도망가!!!" → 끝나면 층 이동 (G.trans)
   const sp = stairsPos();
-  for (const r of G.rats) if (onScreen(r.x, r.y)) { r.rushT = 1.5; r.noBreed = 1.5 + RUSH_NO_BREED; }
+  for (const r of G.rats) if (onScreen(r.x, r.y)) { r.rushT = 1.5; r.noBreed = 1.5 + RUSH_NO_BREED; r.rushLock = 2; }
   G.rush = { x: sp.x, y: sp.y, t: 1.5, max: 1.5 };
   Sfx.clear(); Sfx.dash();
 }
@@ -206,13 +191,13 @@ function drawStageUI() {
     rr(ctx, x - 14, y - 34, bw + 28, 62, 14); ctx.fillStyle = 'rgba(40,32,36,.82)'; ctx.fill();
     ctx.font = "700 17px 'IBM Plex Sans KR', sans-serif"; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(`👹 ${def.name}`, x, y - 16);
-    if (bf) { const tt = Math.ceil(bf.t); ctx.textAlign = 'right'; ctx.fillStyle = bf.t < 10 ? (Math.sin(G.t * 12) > 0 ? '#e8786a' : '#fff') : '#fff3bf'; ctx.fillText(`⏰ ${tt}초`, x + bw, y - 16); }
+    if (S.inRun) { const tt = Math.ceil(S.timeLeft); ctx.textAlign = 'right'; ctx.fillStyle = tt < 30 ? (Math.sin(G.t * 12) > 0 ? '#e8786a' : '#fff') : '#fff3bf'; ctx.fillText(`⏳ ${Math.floor(tt / 60)}:${String(tt % 60).padStart(2, '0')}`, x + bw, y - 16); }   // 층 제한시간
     rr(ctx, x, y, bw, 14, 7); ctx.fillStyle = 'rgba(255,255,255,.15)'; ctx.fill();
     rr(ctx, x, y, bw * k, 14, 7); ctx.fillStyle = def.col; ctx.fill();
     if (b.hitT > 0) { ctx.globalAlpha = b.hitT * 3; rr(ctx, x, y, bw * k, 14, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.globalAlpha = 1; }
-    if (bf) { rr(ctx, x, y + 18, bw * bf.t / bf.max, 4, 2); ctx.fillStyle = '#fff3bf'; ctx.fill(); }
     ctx.restore();
   }
+  drawHeist(); drawGameOverFx();          // meta.js: "연구 자료를 훔쳤다!!!" · 일망타진
   if (G.trans) {
     const T = G.trans, k = T.t < 0 ? 0 : clamp(1 - Math.abs(T.t - T.dur / 2) / (T.dur / 2), 0, 1) * 1.4;
     ctx.fillStyle = `rgba(20,16,20,${clamp(k, 0, 1)})`; ctx.fillRect(0, 0, W, H);

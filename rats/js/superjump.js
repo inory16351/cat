@@ -10,7 +10,7 @@ const SJ_COOL = 120;            // 한 번 터지면 최소 2분은 쉼 (첫 발
 const sjEase = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 
 function trySuperJump(dt) {
-  if (G.sj || G.ult) return;
+  if (G.sj || G.ult || G.go || G.heist || !S.inRun) return;
   G.sjCool = (G.sjCool ?? 60) - dt;
   // 스킬·도감 같은 창이 열려 있으면 안 보이니까 참았다가 나중에
   if (G.sjCool <= 0 && Math.random() < SJ_CHANCE * (1 + 0.25 * lv('sjump')) * dt && !document.querySelector('.screen:not(.hidden)')) startSuperJump(false);

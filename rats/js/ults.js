@@ -8,7 +8,7 @@
 const ULT_CUT = 1.4, ULT_R = 560, TABLE_W = 240, PYR_W = 320, PYR_FALL = 5.7;   // PYR_FALL: 피라미드 팽이가 멈추고 쓰러지기 시작하는 시각
 
 function tryUlt(dt) {
-  if (G.ult || G.sj) return;
+  if (G.ult || G.sj || G.go || G.heist || !S.inRun) return;
   G.ultCool = (G.ultCool ?? 40) - dt;
   if (G.ultCool > 0 || Math.random() >= ULT_CHANCE * (1 + 0.2 * lv('ultcd')) * dt || document.querySelector('.screen:not(.hidden)')) return;
   const pool = G.rats.filter(r => r.sp.ult && !r.temp && !r.ultOn && onScreen(r.x, r.y, -80));

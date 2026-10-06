@@ -11,7 +11,7 @@ const TIERS = [
   { name: '에픽', col: '#a58bb8', size: 1.25, dmg: 4, spd: 1.1, w: 1, ab: 1.7, cost: 10 },
   { name: '유니크', col: '#c9846e', size: 1.4, dmg: 8, spd: 1.15, w: 0.1, ab: 2.2, cost: 30 },
   { name: '전설', col: '#d9a441', size: 1.6, dmg: 16, spd: 1.1, w: 0.01, ab: 3, cost: 100 },
-  { name: '신화', col: '#d9786a', size: 1.85, dmg: 32, spd: 1.2, w: 0.002, ab: 4, cost: 300 },
+  { name: '신화', col: '#d9786a', size: 1.85, dmg: 32, spd: 1.2, w: 0.00186, ab: 4, cost: 300 },   // 훈장 1·스킬 없음: 탄생의 약 0.0017%
 ];
 
 // 털색 프리셋 (실제 쥐·설치류)
@@ -48,7 +48,20 @@ const RSPECIES = [
   R('hooded', 0, 'rat', '후디드 래트', 'hooded', [], '머리만 까만 후드를 쓴 것처럼 생겼다. 본인은 멋있다고 생각한다.', 'a hooded rat: white body with a dark grey head and shoulders'),
   R('fieldmouse', 0, 'mouse', '들쥐', 'field', [], '시골에서 올라왔다. 도시는 처음이다.', 'a tan field mouse'),
   R('hamster', 0, 'hamster', '골든 햄스터', 'golden', [], '쥐들의 먼 사촌. 볼에 해바라기씨를 잔뜩 넣고 따라왔다.', 'a golden hamster with full cheek pouches'),
+  // (2026-10 추가) 낮은 등급이 적어서 실제 설치류 8종 + 직업 코스튬 4종
+  R('blackrat', 0, 'rat', '곰쥐', 'black', [], '지붕과 다락을 타고 다니는 날렵한 검은 쥐. 높은 곳이 고향.', 'a sleek BLACK rat (Rattus rattus) with large thin ears and a very long tail'),
+  R('hairless', 0, 'rat', '털 없는 쥐', 'white', [], '털이 하나도 없는 분홍빛 쥐. 추위를 많이 탄다.', 'a pink HAIRLESS rat with wrinkly bare pink skin, dark eyes and curly whiskers'),
+  R('harvest', 0, 'mouse', '멧밭쥐', 'golden', [], '세상에서 제일 작은 쥐 중 하나. 이삭 위에서 줄타기를 한다.', 'a TINY orange-golden HARVEST mouse with a white belly and a long grasping tail'),
+  R('dwarfham', 0, 'hamster', '정글리안 햄스터', 'djungarian', [], '등에 검은 줄무늬가 있는 작은 햄스터. 볼에 해바라기씨를 빵빵하게.', 'a small grey-white DJUNGARIAN dwarf hamster with a dark stripe down its back and full cheeks'),
+  R('spiny', 0, 'mouse', '가시쥐', 'grey', [], '등에 뻣뻣한 가시털이 난 쥐. 만지면 따끔하다.', 'a grey-brown SPINY mouse with stiff spiky guard hairs on its back and big ears'),
+  R('jerboa', 0, 'gerbil', '사막뛰는쥐', 'gerbil', [], '캥거루처럼 긴 뒷다리로 통통 뛴다. 귀도 엄청 크다.', 'a sandy JERBOA with very long kangaroo-like hind legs, huge ears and a long tufted tail'),
   // 1 직장인: 일상 코스튬
+  // 낮은 등급 보강 (2026-10-02, 사용자: 낮은 등급 쥐가 부족) — 일반 4 · 레어 4
+  R('dumbo', 0, 'rat', '덤보 래트', 'grey', [], '귀가 얼굴 옆에 붙어 있다. 귀가 커서 연구소 소문을 다 듣는다.', 'a fancy dumbo rat with big round ears set low on the sides of its head'),
+  R('gerbilc', 0, 'gerbil', '저빌', 'gerbil', [], '사막에서 왔다. 꼬리 끝 털술이 자랑.', 'a sandy-colored gerbil with a long tufted tail'),
+  R('farmer', 1, 'rat', '농부 쥐', 'brown', ['strawhat'], '밀짚모자 쓴 시골 쥐. 연구소 화분으로 치즈 농사를 꿈꾼다.', 'a brown rat farmer wearing a straw hat and blue overalls'),
+  R('boxer', 1, 'rat', '복서 쥐', 'brown', ['gloves'], '잽 잽 원투! 물건도 펀치로 부순다.', 'a brown rat boxer wearing red boxing gloves and a headband'),
+  R('student', 1, 'hamster', '학생 햄스터', 'golden', ['schoolcap'], '수업 땡땡이 치고 탈출에 합류했다.', 'a golden hamster student wearing a school cap and a tiny backpack'),
   R('scientist', 1, 'rat', '연구원 쥐', 'white', ['labcoat', 'goggles'], '실험 대상이었는데 어느새 연구원 행세를 하고 있다.', 'a white rat wearing a tiny lab coat and safety goggles'),
   R('nerd', 1, 'rat', '안경 쥐', 'grey', ['glasses', 'pencil'], '탈출 경로를 계산 중. 계산은 틀렸다.', 'a grey rat with round glasses and a pencil behind its ear'),
   R('builder', 1, 'rat', '공사장 쥐', 'brown', ['hardhat'], '벽 부수기 전문. 안전모는 폼이다.', 'a brown rat wearing a yellow construction hard hat'),
@@ -57,60 +70,64 @@ const RSPECIES = [
   R('mailman', 1, 'mouse', '집배원 생쥐', 'field', ['mailcap', 'mailbag'], '편지는 배달 안 하고 봉투만 갉는다.', 'a field mouse mail carrier with a cap and a shoulder mail bag'),
   R('courier', 1, 'rat', '택배 기사 쥐', 'brown', ['cap', 'parcel'], '배송 완료. 상자는 이미 갉아먹었다.', 'a brown rat delivery courier in a cap carrying a cardboard parcel'),
   R('party', 1, 'mouse', '파티 생쥐', 'grey', ['partyhat', 'confetti'], '매일이 파티다. 오늘도 뭔가 부서졌으니까.', 'a grey mouse in a striped party cone hat with confetti around'),
+  R('janitorat', 1, 'rat', '청소부 쥐', 'brown', [], '연구소 청소 담당. 대걸레만 들면 무적이 된다.', 'a brown rat JANITOR wearing a blue cap and work overalls, holding a small mop'),
+  R('barista', 1, 'rat', '바리스타 쥐', 'hooded', [], '연구원들 커피를 몰래 타 주던 쥐. 카페인으로 움직인다.', 'a hooded rat BARISTA wearing a brown apron and a little cap, holding a tiny coffee cup'),
+  R('gardener', 1, 'hamster', '정원사 햄스터', 'golden', [], '연구소 화분을 돌보던 햄스터. 밀짚모자가 트레이드마크.', 'a golden hamster GARDENER in a straw hat and green overalls, holding a tiny watering can'),
+  R('painter', 1, 'mouse', '화가 생쥐', 'white', [], '벽마다 낙서… 아니 작품을 남긴다. 베레모는 필수.', 'a white mouse PAINTER wearing a red beret and a paint-splattered smock, holding a paintbrush'),
   // 2 돌연변이·취미
   R('glowy', 2, 'rat', '형광 쥐', 'neon', ['glow'], '실험 약품을 쏟았다. 밤에도 잘 보인다.', 'a glowing neon-yellow mutant rat with a soft aura'),
   R('mutant', 2, 'rat', '더듬이 돌연변이', 'green', ['glow', 'antenna'], '더듬이가 났다. 와이파이도 잡힌다.', 'a pale green mutant rat with two little antennae'),
   R('buff', 2, 'rat', '근육 쥐', 'brown', ['headband', 'muscle'], '쳇바퀴를 3만 바퀴 돌았다. 3대 500.', 'an absurdly muscular brown rat with a sweatband, flexing'),
   R('ninja', 2, 'rat', '닌자 쥐', 'black', ['ninja'], '하수구에서 무술을 배웠다. 피자를 좋아한다.', 'a black rat ninja with a red headband mask'),
-  R('pandahamster', 2, 'hamster', '판다 잠옷 정글리안', 'djungarian', ['pandahood', 'bamboo'], '판다 잠옷을 입은 햄스터. 쥐들의 마스코트.', 'a Djungarian hamster in a panda pajama hood holding a bamboo stick'),
-  R('skater', 2, 'mouse', '스케이터 생쥐', 'grey', ['beanie', 'skateboard'], '보드 타고 벽에 들이받는 게 취미.', 'a grey mouse in a beanie riding a small skateboard'),
+  R('pandahamster', 0, 'hamster', '판다 잠옷 정글리안', 'djungarian', ['pandahood', 'bamboo'], '판다 잠옷을 입은 햄스터. 쥐들의 마스코트.', 'a Djungarian hamster in a panda pajama hood holding a bamboo stick'),
+  R('skater', 1, 'mouse', '스케이터 생쥐', 'grey', ['beanie', 'skateboard'], '보드 타고 벽에 들이받는 게 취미.', 'a grey mouse in a beanie riding a small skateboard'),
   R('idol', 2, 'mouse', '아이돌 생쥐', 'white', ['bow', 'mic'], '찍찍! 오늘도 팬들(쥐)에게 둘러싸였다.', 'a white mouse pop idol with a big hair bow holding a microphone'),
   // 패러디 쥐 (원작 디자인·이름·실존 인물 이름/외모는 쓰지 않고 비틂): 컴퓨터 마우스 쥐(에픽, 한 장짜리 그림) + 전설·신화 4종(전용 필살기)
   R('pcmouse', 2, 'mouse', '컴퓨터 마우스 쥐', 'grey', [], '얼굴이 없다. 그냥 진짜 마우스인데 혼자 돌아다닌다. 누르면 딸깍, 꼬리는 USB 케이블.', 'a REAL beige office computer mouse that came alive and runs around'),
-  R('sleepy', 2, 'rat', '잠옷 쥐', 'grey', ['nightcap', 'pillow'], '자다가 끌려나왔다. 눈은 감고 갉는다.', 'a sleepy grey rat in a striped nightcap hugging a tiny pillow'),
+  R('sleepy', 0, 'rat', '잠옷 쥐', 'grey', ['nightcap', 'pillow'], '자다가 끌려나왔다. 눈은 감고 갉는다.', 'a sleepy grey rat in a striped nightcap hugging a tiny pillow'),
   // 3 특수부대
   R('cyborg', 3, 'rat', '사이보그 쥐', 'steel', ['cyber'], '연구소가 만든 최종 병기… 였는데 탈주했다.', 'a cyborg rat with metal plates and a glowing red eye lens'),
-  R('police', 3, 'rat', '경찰 쥐', 'grey', ['policecap', 'badge'], '자기 자신을 체포하려다 포기했다.', 'a grey rat police officer with a navy cap and a gold badge'),
-  R('firefighter', 3, 'rat', '소방관 쥐', 'brown', ['firehelmet'], '불은 끄고, 벽은 부순다.', 'a brown rat firefighter in a red helmet'),
-  R('pirate', 3, 'rat', '해적 쥐', 'brown', ['pirate', 'eyepatch'], '하수구를 항해하는 무법자. 보물은 치즈.', 'a brown rat pirate with a tricorn hat and an eye patch'),
-  R('cowboy', 3, 'mouse', '카우보이 생쥐', 'field', ['cowboy', 'scarf'], '이 동네는 둘이 쓰기엔 너무 좁군.', 'a field mouse cowboy with a wide brown hat and a red bandana'),
+  R('police', 2, 'rat', '경찰 쥐', 'grey', ['policecap', 'badge'], '자기 자신을 체포하려다 포기했다.', 'a grey rat police officer with a navy cap and a gold badge'),
+  R('firefighter', 2, 'rat', '소방관 쥐', 'brown', ['firehelmet'], '불은 끄고, 벽은 부순다.', 'a brown rat firefighter in a red helmet'),
+  R('pirate', 2, 'rat', '해적 쥐', 'brown', ['pirate', 'eyepatch'], '하수구를 항해하는 무법자. 보물은 치즈.', 'a brown rat pirate with a tricorn hat and an eye patch'),
+  R('cowboy', 2, 'mouse', '카우보이 생쥐', 'field', ['cowboy', 'scarf'], '이 동네는 둘이 쓰기엔 너무 좁군.', 'a field mouse cowboy with a wide brown hat and a red bandana'),
   R('soldier', 3, 'rat', '특공대 쥐', 'green', ['armyhelmet', 'camo'], '위장 완료. 근데 쥐는 원래 잘 안 보인다.', 'a rat commando in a green army helmet and camouflage vest'),
-  R('nurse', 3, 'mouse', '간호사 생쥐', 'white', ['nursecap'], '다친 쥐를 돌본다. 물건은 안 돌본다.', 'a white mouse nurse with a small nurse cap'),
-  R('miner', 3, 'gerbil', '광부 저빌', 'gerbil', ['minerlamp'], '벽을 파는 게 본업. 헤드랜턴이 자랑.', 'a gerbil miner with a helmet headlamp'),
+  R('nurse', 2, 'mouse', '간호사 생쥐', 'white', ['nursecap'], '다친 쥐를 돌본다. 물건은 안 돌본다.', 'a white mouse nurse with a small nurse cap'),
+  R('miner', 2, 'gerbil', '광부 저빌', 'gerbil', ['minerlamp'], '벽을 파는 게 본업. 헤드랜턴이 자랑.', 'a gerbil miner with a helmet headlamp'),
   // 4 전설: 판타지·대중문화
-  R('hero', 4, 'mouse', '슈퍼 생쥐', 'grey', ['cape', 'mask'], '망토를 두르면 하늘을 난다고 믿는다. 못 난다.', 'a grey mouse superhero with a red cape and a domino mask'),
+  R('hero', 3, 'mouse', '슈퍼 생쥐', 'grey', ['cape', 'mask'], '망토를 두르면 하늘을 난다고 믿는다. 못 난다.', 'a grey mouse superhero with a red cape and a domino mask'),
   R('wizard', 4, 'rat', '마법사 쥐', 'purple', ['wizard', 'wand'], '치즈를 금으로 바꾸는 주문을 연구 중이다. 반대로 됐다.', 'a rat wizard in a starry purple pointed hat holding a wand'),
   R('samurai', 4, 'rat', '사무라이 쥐', 'black', ['samurai'], '해바라기씨를 반으로 가르는 검술의 달인.', 'a black rat samurai with a topknot and a tiny katana'),
   R('rocker', 4, 'rat', '쥐.D', 'hooded', ['guitar', 'sunglasses'], '하수구 투어 매진, 관객은 전부 쥐다. 무대 위에선 쥐.D, 무대 밖에선 그냥 시궁쥐.', 'a hooded rat rock star in sunglasses with an electric guitar'),
-  R('detective', 4, 'rat', '탐정 쥐', 'brown', ['detective', 'pipe'], '범인은 이 안에 있다. 사실 전부 범인이다.', 'a brown rat detective in a deerstalker hat with a pipe'),
+  R('detective', 3, 'rat', '탐정 쥐', 'brown', ['detective', 'pipe'], '범인은 이 안에 있다. 사실 전부 범인이다.', 'a brown rat detective in a deerstalker hat with a pipe'),
   R('vampire', 4, 'rat', '뱀파이어 쥐', 'black', ['vampire'], '피 대신 토마토 주스를 마신다. 가끔 케첩.', 'a black rat vampire with a high-collared cape and tiny fangs'),
   R('santa', 4, 'mouse', '산타 생쥐', 'white', ['santa', 'sack'], '선물 대신 부서진 물건을 나눠준다.', 'a white mouse Santa with a red hat and a gift sack'),
-  R('zapham', 4, 'hamster', '찌릿 햄찌 (코스프레)', 'golden', [], '전기 쥐 코스프레 중인 햄스터. 사실 전기는 등에 멘 건전지에서 나온다.', 'a chubby golden hamster wearing a clearly HOMEMADE lumpy yellow fleece costume hood with two floppy felt ears with brown tips, round red circle STICKERS stuck crookedly on its cheeks, a zigzag CARDBOARD tail taped on with visible tape, and a big AA battery strapped to its back with a wire'),
-  R('parkrat', 4, 'mouse', '쥐랜드 관광쥐', 'grey', [], '놀이공원 기념품 가게에서 산 동그란 귀 머리띠를 절대 안 벗는다. 자기가 원조라고 우긴다.', 'a grey mouse TOURIST wearing a cheap plastic souvenir headband with two round fuzzy black ears, heart-shaped pink sunglasses, a striped souvenir t-shirt with no text, a fanny pack, and holding a small heart-shaped balloon on a string'),
+  R('zapham', 5, 'hamster', '찌릿 햄찌 (코스프레)', 'golden', [], '전기 쥐 코스프레 중인 햄스터. 사실 전기는 등에 멘 건전지에서 나온다.', 'a chubby golden hamster wearing a clearly HOMEMADE lumpy yellow fleece costume hood with two floppy felt ears with brown tips, round red circle STICKERS stuck crookedly on its cheeks, a zigzag CARDBOARD tail taped on with visible tape, and a big AA battery strapped to its back with a wire'),
+  R('parkrat', 5, 'mouse', '쥐랜드 관광쥐', 'grey', [], '놀이공원 기념품 가게에서 산 동그란 귀 머리띠를 절대 안 벗는다. 자기가 원조라고 우긴다.', 'a grey mouse TOURIST wearing a cheap plastic souvenir headband with two round fuzzy black ears, heart-shaped pink sunglasses, a striped souvenir t-shirt with no text, a fanny pack, and holding a small heart-shaped balloon on a string'),
   R('plaguerat', 4, 'rat', '트위쥐', 'brown', [], '하수구 구석에서 킥킥거리며 나타난다. 석궁은 아이스크림 막대로 만들었다.', 'a sneaky hunched brown sewer rat in a tattered patched hooded rag cloak, one squinting eye and a crooked grin, holding a tiny homemade crossbow made of popsicle sticks and a rubber band, a small bubbling green bottle hanging from its belt'),
-  R('zombie', 4, 'rat', '좀비 쥐', 'green', ['bandage'], '뇌… 가 아니라 치즈…', 'a pale green zombie rat with bandages, arms forward'),
+  R('zombie', 3, 'rat', '좀비 쥐', 'green', ['bandage'], '뇌… 가 아니라 치즈…', 'a pale green zombie rat with bandages, arms forward'),
   // 5 신화: 왕족
-  R('ratking', 5, 'rat', '쥐왕', 'brown', ['crown', 'robe'], '모든 쥐의 왕. 인간 세상 정복을 선언했다.', 'a brown rat king with a gold crown and a red royal robe'),
-  R('ratqueen', 5, 'rat', '쥐 여왕', 'white', ['tiara', 'robe'], '우아하게, 그러나 확실하게 갉는다.', 'a white rat queen with a tiara and a red royal robe'),
+  R('ratking', 4, 'rat', '쥐왕', 'brown', ['crown', 'robe'], '모든 쥐의 왕. 인간 세상 정복을 선언했다.', 'a brown rat king with a gold crown and a red royal robe'),
+  R('ratqueen', 4, 'rat', '쥐 여왕', 'white', ['tiara', 'robe'], '우아하게, 그러나 확실하게 갉는다.', 'a white rat queen with a tiara and a red royal robe'),
   R('emperor', 5, 'rat', '쥐 황제', 'grey', ['emperor'], '하수구 제국의 황제. 영토는 맨홀 뚜껑 세 개.', 'a grey rat emperor in a yellow embroidered imperial robe and hat'),
   R('pharaoh', 5, 'mouse', '파라오 생쥐', 'field', ['pharaoh'], '피라미드 대신 치즈 더미를 쌓았다.', 'a mouse pharaoh with a blue-and-gold striped nemes headdress'),
   R('knight', 5, 'rat', '기사 쥐', 'steel', ['knight'], '갑옷이 너무 무겁다. 그래도 들이받는다.', 'a rat knight in shiny armor with a helmet plume'),
-  R('viking', 5, 'rat', '바이킹 쥐', 'brown', ['viking'], '뿔 투구를 쓰고 하수구를 약탈한다.', 'a brown rat viking with a horned helmet and a round shield'),
+  R('viking', 4, 'rat', '바이킹 쥐', 'brown', ['viking'], '뿔 투구를 쓰고 하수구를 약탈한다.', 'a brown rat viking with a horned helmet and a round shield'),
   R('sultan', 5, 'hamster', '술탄 햄스터', 'golden', ['turban'], '해바라기씨 궁전의 주인. 볼주머니에 보물이 가득.', 'a golden hamster sultan with a jeweled turban'),
-  R('ballerina', 5, 'mouse', '프리마 발레리나 생쥐', 'white', ['tutu', 'tiara'], '백조의 호수 대신 하수구의 호수.', 'a white mouse prima ballerina in a pink tutu and tiara'),
+  R('ballerina', 3, 'mouse', '프리마 발레리나 생쥐', 'white', ['tutu', 'tiara'], '백조의 호수 대신 하수구의 호수.', 'a white mouse prima ballerina in a pink tutu and tiara'),
   // 5 신화: 우주·저세상
-  R('astro', 5, 'rat', '우주비행사 쥐', 'white', ['spacesuit'], '다음 목표는 달. 달은 치즈라고 들었다.', 'a rat astronaut in a white space suit with a round glass helmet'),
+  R('astro', 3, 'rat', '우주비행사 쥐', 'white', ['spacesuit'], '다음 목표는 달. 달은 치즈라고 들었다.', 'a rat astronaut in a white space suit with a round glass helmet'),
   R('alien', 5, 'mouse', '외계인 생쥐', 'green', ['alien'], '지구를 정복하러 왔는데 생쥐가 되어버렸다.', 'a green alien mouse with big black eyes and two antennae'),
-  R('robot', 5, 'rat', '로봇 쥐', 'steel', ['robot'], '100% 기계. 가끔 치즈를 연료로 넣는다.', 'a boxy retro robot rat made of steel plates'),
-  R('dragon', 5, 'rat', '드래곤 쥐', 'purple', ['dragon'], '입에서 불 대신 치즈 냄새가 난다.', 'a rat in a purple dragon costume with wings and spikes'),
-  R('cosmic', 5, 'hamster', '우주 친칠라', 'chinchilla', ['halo', 'cosmic'], '쳇바퀴를 너무 빨리 돌려서 시공간을 넘어버린 친칠라.', 'a cosmic chinchilla with a golden halo and tiny stars around'),
-  R('ghost', 5, 'rat', '유령 쥐', 'ghost', ['sheet'], '이불을 뒤집어쓰고 벽을 통과… 하려다 부쉈다.', 'a rat under a white bedsheet ghost costume with eye holes, tail sticking out'),
-  R('angel', 5, 'mouse', '천사 생쥐', 'white', ['wings', 'halo'], '쥐 천국에서 내려왔다. 천국에도 치즈는 없었다.', 'a white mouse angel with feathered wings and a halo'),
+  R('robot', 4, 'rat', '로봇 쥐', 'steel', ['robot'], '100% 기계. 가끔 치즈를 연료로 넣는다.', 'a boxy retro robot rat made of steel plates'),
+  R('dragon', 3, 'rat', '드래곤 쥐', 'purple', ['dragon'], '입에서 불 대신 치즈 냄새가 난다.', 'a rat in a purple dragon costume with wings and spikes'),
+  R('cosmic', 4, 'hamster', '우주 친칠라', 'chinchilla', ['halo', 'cosmic'], '쳇바퀴를 너무 빨리 돌려서 시공간을 넘어버린 친칠라.', 'a cosmic chinchilla with a golden halo and tiny stars around'),
+  R('ghost', 3, 'rat', '유령 쥐', 'ghost', ['sheet'], '이불을 뒤집어쓰고 벽을 통과… 하려다 부쉈다.', 'a rat under a white bedsheet ghost costume with eye holes, tail sticking out'),
+  R('angel', 3, 'mouse', '천사 생쥐', 'white', ['wings', 'halo'], '쥐 천국에서 내려왔다. 천국에도 치즈는 없었다.', 'a white mouse angel with feathered wings and a halo'),
   R('streamrat', 5, 'rat', '흐에~ 스트리머 쥐', 'brown', [], '24시간 생방송 중인 안경 쥐. 뭘 부숴도 "흐에~~" 하고 웃는다. 도네가 들어오면 어쩔 수 없이 쥐커드를 한다.', 'a cheerful brown rat STREAMER wearing round black glasses and a big glowing gaming headset with a boom microphone, a comfy oversized hoodie, fingerless gloves, a tiny webcam clipped on the hood, holding a small game controller'),
   R('ramjui', 5, 'squirrel', '다람쥐', 'field', [], '도토리를 좋아하는 평범한 다람쥐. 정말 평범하다. …신화 등급인 데는 다 이유가 있겠지?', 'a completely ORDINARY cute red squirrel: warm orange-brown fur, a cream belly, a big bushy tail, small tufted ears, a calm innocent face, NO costume, NO accessories, NO special markings, nothing special at all'),
   R('jwerry', 5, 'mouse', '줴리', 'brown', [], '고양이를 골탕 먹이는 게 취미인 동글동글한 생쥐. 박수만 받으면 뻔뻔하게 허리 숙여 "감사합니다!!"', 'a TINY cheeky classic-cartoon-style mouse with RICH warm orange-brown fur (darker and more saturated, not pale), a big ROUND head with big round ears (pink insides), a cream muzzle and belly, a SLENDER small body (NOT chubby, NOT round-bellied), thin legs, a long thin tail, a smug little grin, NO clothes'),
   R('starchef', 5, 'rat', '슈퍼 요리사 쥐', 'grey', [], '코가 좋은 천재 요리사 쥐. 늘 요리사 등에 올라타 머리카락을 잡고 조종한다. 요리사는 퇴사를 고민 중.', 'a small blue-grey rat head chef. HEAD: blue-grey rat head wearing a tall white chef toque with three tiny gold stars pinned on it. TORSO: a normal HORIZONTAL rat body (longer than tall, like a four-legged rat lying level) dressed in a snug white double-breasted chef jacket that wraps the whole body like a little coat, two rows of small buttons along the side, a red neckerchief tied at the neck end (left end); NO hands, NO paws and NO arms drawn on the torso. FRONT LEG: blue-grey rat leg with a short white chef-jacket sleeve cuff at the top, the small paw holding a tiny wooden spoon. HIND LEG: normal slim rat hind leg, blue-grey fur with a pink foot'),
-  R('dino', 5, 'rat', '공룡 잠옷 쥐', 'brown', ['dinohood'], '공룡 잠옷을 입었더니 자기가 공룡인 줄 안다. 크아앙.', 'a rat in a green dinosaur pajama onesie with spikes'),
+  R('dino', 3, 'rat', '공룡 잠옷 쥐', 'brown', ['dinohood'], '공룡 잠옷을 입었더니 자기가 공룡인 줄 안다. 크아앙.', 'a rat in a green dinosaur pajama onesie with spikes'),
 ];
 const RSPECIES_BY_ID = Object.fromEntries(RSPECIES.map(s => [s.id, s]));
 // 파츠 시트 프롬프트용 체형 설명 덮어쓰기 (dev/gen_parts_group.mjs)
@@ -146,7 +163,12 @@ const AB_TYPES = {
 // [종 id, 능력 종류, 이름, 아이콘, (trick 종류)]
 const AB_LIST = [
   ['pcmouse', 'double', '더블 클릭', '🖱️'], ['zapham', 'chain', '건전지 방전', '⚡'], ['parkrat', 'leader', '퍼레이드 인솔', '🎈'], ['streamrat', 'gift', '후원 택배 폭탄', '🎁'], ['starchef', 'chain', '비밀 레시피', '👨‍🍳'], ['ramjui', 'chain', '찌리찌리', '⚡'], ['jwerry', 'crit', '뻔뻔한 한 방', '😏'], ['plaguerat', 'bomb', '역병 플라스크', '🧪'],
+  ['blackrat', 'pack', '지붕 위 떼', '🐀'], ['hairless', 'crit', '맨살 급소', '🎯'], ['harvest', 'dash', '이삭 질주', '🌾'],
+  ['dwarfham', 'loot', '볼 빵빵', '🌻'], ['spiny', 'double', '가시 찌르기', '🌵'], ['jerboa', 'dash', '캥거루 점프', '🦘'],
+  ['janitorat', 'loot', '청소 수거', '🧹'], ['barista', 'double', '에스프레소 샷', '☕'], ['gardener', 'breed', '새싹 키우기', '🌱'], ['painter', 'bomb', '물감 폭탄', '🎨'],
   ['brownrat', 'pack', '떼거리 근성', '🐀'], ['mouse', 'wall', '벽 틈 갉기', '🧱'], ['labrat', 'dash', '미로 질주', '🌀'],
+  ['dumbo', 'crit', '소문 청취', '👂'], ['gerbilc', 'wall', '모래 파기', '🏜️'],
+  ['farmer', 'breed', '풍년 농사', '🌾'], ['boxer', 'knock', '원투 펀치', '🥊'], ['student', 'crit', '벼락치기', '📚'],
   ['hooded', 'knock', '후드 박치기', '💢'], ['fieldmouse', 'breed', '시골 다산', '💞'], ['hamster', 'loot', '볼주머니', '🌻'],
   ['scientist', 'bomb', '플라스크 투척', '⚗️'], ['nerd', 'crit', '약점 계산', '🤓'], ['builder', 'wall', '해체 작업', '⛏️'],
   ['chef', 'double', '칼질 연타', '🔪'], ['traveler', 'loot', '여행 가방', '🎒'], ['mailman', 'gift', '등기 배달', '✉️'],
@@ -405,7 +427,22 @@ const ACT_LIST = [
   A('starchef', 'bump', { p: 0.035 }, 'feast', '다지기 연타', '🔪', ['봉주르!', '다다다닥!', '소스는 치즈로!'], '🔪'),
   A('plaguerat', 'combo', { n: 15, p: 0.08 }, 'barrage', '역병 석궁 난사', '🏹', ['킥킥킥…', '역병을 퍼뜨려라!', '(아이스크림 막대 석궁)']),
   A('brownrat', 'crowd', { n: 6, cd: 20 }, 'summon', '하수구 동창회', '📢', ['얘들아 모여!', '동창회다!']),
+  A('blackrat', 'crowd', { n: 6, cd: 20 }, 'summon', '다락방 습격', '🌙', ['지붕 위로 집합!', '다락 친구들!']),
+  A('hairless', 'bump', { p: 0.03 }, 'slash', '맨몸 돌진', '💨', ['추워! 달려!', '맨살 주의!']),
+  A('harvest', 'wall', { p: 0.12 }, 'slash', '이삭 줄타기', '🌾', ['쪼로로록!', '줄타기다!']),
+  A('dwarfham', 'drop', { p: 0.04 }, 'ball', '정글 볼 굴리기', '🔵', ['데굴데굴~!', '볼 빵빵!'], '🔵'),
+  A('spiny', 'combo', { n: 10, p: 0.08 }, 'slam', '가시 공 굴리기', '🌵', ['따끔!', '굴러간다!']),
+  A('jerboa', 'bump', { p: 0.03 }, 'slash', '사막 대점프', '🦘', ['통통통!', '점프!']),
+  A('janitorat', 'drop', { p: 0.04 }, 'barrage', '대걸레 스윙', '🧹', ['청소 시간!', '깨끗하게!'], '🧹'),
+  A('barista', 'timer', { cd: 20 }, 'cheer', '커피 한 잔씩', '☕', ['커피 나왔습니다!', '샷 추가!']),
+  A('gardener', 'birth', { p: 0.35 }, 'summon', '꽃밭 대가족', '🌻', ['새싹이 돋았다!', '물 주자~']),
+  A('painter', 'drop', { p: 0.04 }, 'barrage', '물감 난사', '🎨', ['예술은 폭발이다!', '알록달록!'], '🎨'),
   A('mouse', 'wall', { p: 0.12 }, 'slash', '벽 틈 질주', '💨', ['쪼르르르!', '찍찍 질주!']),
+  A('dumbo', 'timer', { cd: 20 }, 'sonic', '귀 펄럭 소문 폭탄', '👂', ['다 들린다!', '소문 들었어?']),
+  A('gerbilc', 'wall', { p: 0.1 }, 'slash', '모래 질주', '🏜️', ['사사삭!', '모래바람!']),
+  A('farmer', 'drop', { p: 0.04 }, 'barrage', '감자 투척', '🥔', ['올해 감자 풍년!', '받아라 감자!'], '🥔'),
+  A('boxer', 'bump', { p: 0.035 }, 'slam', '어퍼컷', '🥊', ['원투!', 'KO!']),
+  A('student', 'combo', { n: 20, p: 0.1 }, 'cheer', '쉬는 시간!', '🔔', ['종 쳤다!', '쉬는 시간이다!']),
   A('labrat', 'bump', { p: 0.03 }, 'slash', '미로 폭주', '🌀', ['출구가 어디야!', '미로 탈출!']),
   A('hooded', 'combo', { n: 10, p: 0.08 }, 'slam', '후드 3단 박치기', '💢', ['박치기다!', '후드 파워!']),
   A('fieldmouse', 'birth', { p: 0.35 }, 'summon', '대가족 상경', '🏡', ['시골 식구들 왔다!', '할머니도 오셨어!']),
@@ -542,8 +579,8 @@ const ULT_LIST = [
 for (const u of ULT_LIST) RSPECIES_BY_ID[u.id].ult = u;
 
 const RAT_TREE_BY_ID = Object.fromEntries(RAT_TREE.map(s => [s.id, s]));
-const rampNeed = R => Math.floor(15 * Math.pow(1.3, R));      // 난동 등급 R → R+1 에 필요한 파괴 수
-const PROMOTE_COST = 10, PROMO_KEEP = 20;   // 일괄 승급은 번식용 20마리를 남김 · 같은 등급 10마리 → 윗등급 랜덤 1마리 (신화는 승급 없음)
+// (난동 등급은 티어로 대체되어 삭제됨 — meta.js)
+const PROMOTE_COST = 10, PROMO_KEEP = 6;    // 일괄 승급은 번식용 6마리를 남김 (20이면 초반 정원 30에선 거의 안 됐음) · 같은 등급 10마리 → 윗등급 랜덤 1마리 (신화는 승급 없음)
 function fx(v) { return v < 1000 ? v.toFixed(2) : fmt(v); }
 
 // ───────────────────────── 조각 (종별 자동 강화) ─────────────────────────

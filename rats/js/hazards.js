@@ -252,7 +252,7 @@ function catFlung(c, a) {
   if (c.state === 'flung' || c.state === 'leave') return;
   c.hp = 0; c.state = 'flung'; c.vx = Math.cos(a) * 560; c.vy = Math.sin(a) * 560; c.vz = 760; c.bounces = 0; c.life = 4;
   for (const o of G.rats) o.flee = 0;
-  const gain = (c.value || 0) * comboMult(); earn(gain); addRamp(5 + S.floor); G.combo += 3; G.comboT = 1.6; G.comboBump = 1;
+  const gain = (c.value || 0) * comboMult(); earn(gain); G.combo += 3; G.comboT = 1.6; G.comboBump = 1;
   if (onScreen(c.x, c.y)) { popup(c.x, c.y, '냐아아앙?!', '#fff3bf', 30, 1.2, 100); if (gain) popup(c.x, c.y, '🧀+' + fmt(gain), '#f0c878', 26, 1.2, 60); burst(c.x, c.y, 16, { colors: ['#e39a5a', '#fff'], type: 'star', min: 200, max: 500, s0: 3, s1: 7, z: 40 }); addShake(0.2); G.hitstop = Math.max(G.hitstop, 0.06); Sfx.boom(0.8); }
   bigBanner('🐈 고양이 날려버림!', `${catName(c.kind)} 퇴치 · 쥐의 힘을 보여줬다`, '#f0c878');
 }
